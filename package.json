@@ -1,0 +1,28 @@
+{
+  "name": "dikon",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A tiny copy-file dependency injection helper for TypeScript.",
+  "license": "MIT",
+  "type": "module",
+  "author": "Artem Baranov <temoncher@yandex.ru>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/temoncher/dikon.git"
+  },
+  "scripts": {
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt --write .",
+    "fix": "oxfmt --write . && oxlint --fix",
+    "test": "vitest run",
+    "test:types": "vitest run --typecheck",
+    "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.52.0",
+    "oxlint": "^1.67.0",
+    "typescript": "5.7.2",
+    "vitest": "^4.1.7"
+  }
+}
