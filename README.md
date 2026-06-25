@@ -25,29 +25,25 @@ required values.
 ```ts
 import { dikon } from './dikon';
 
-interface Config {
-  readonly baseUrl: string;
-}
+const createHttpClient = (baseUrl: string) => ({
+  get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+});
+
+const createPostsApi = (httpClient: ReturnType<typeof createHttpClient>) => ({
+  list: () => httpClient.get<readonly { id: number; title: string }[]>('/posts'),
+});
 
 const di = dikon()
-  .require<{ config: Config }>()
+  .require<{ config: { readonly baseUrl: string } }>()
   .provide({
-    httpClient({ config }) {
-      return {
-        get(path: string) {
-          return `${config.baseUrl}${path}`;
-        },
-      };
-    },
+    httpClient: ({ config }) => createHttpClient(config.baseUrl),
   })
   .provide({
-    getPosts({ httpClient }) {
-      return () => httpClient.get('/posts');
-    },
+    postsApi: ({ httpClient }) => createPostsApi(httpClient),
   })
-  .build({ config: { baseUrl: 'https://api.test' } });
+  .build({ config: { baseUrl: 'https://api.example.com' } });
 
-di.getPosts(); // "https://api.test/posts"
+await di.postsApi.list(); // GET https://api.example.com/posts
 ```
 
 Providers are lazy by default. A provider factory runs the first time its service is read, then the
@@ -199,21 +195,26 @@ di[URL]; // "https://api.test/posts"
 Use `dikon(...)` to package reusable builder steps, then pass the plugin to `.pipe(...)`.
 
 ```ts
+const createHttpClient = (baseUrl: string) => ({
+  get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+});
+
+const createPostsApi = (httpClient: ReturnType<typeof createHttpClient>) => ({
+  list: () => httpClient.get<readonly { id: number; title: string }[]>('/posts'),
+});
+
 const withHttpClient = dikon((builder) =>
   builder.require<{ config: { readonly baseUrl: string } }>().provide({
-    httpClient({ config }) {
-      return {
-        get(path: string) {
-          return `${config.baseUrl}${path}`;
-        },
-      };
-    },
+    httpClient: ({ config }) => createHttpClient(config.baseUrl),
   }),
 );
 
 const di = dikon()
   .pipe(withHttpClient)
-  .build({ config: { baseUrl: 'https://api.test' } });
+  .provide({
+    postsApi: ({ httpClient }) => createPostsApi(httpClient),
+  })
+  .build({ config: { baseUrl: 'https://api.example.com' } });
 ```
 
 ## If You Really Need Disposal

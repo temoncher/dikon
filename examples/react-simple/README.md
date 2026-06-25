@@ -10,7 +10,7 @@ dependency flow visible and makes this example a good starting point before look
 ## What It Shows
 
 - `createDi()` declares one required build value: `appConfig`.
-- Providers create a tiny notes store and a derived heading.
+- Provider layers create storage and clock services first, then build a tiny notes store from them.
 - React owns rendering and form state.
 - Dikon owns long-lived app services.
 - The built DI object is passed explicitly through props.
@@ -26,5 +26,6 @@ pnpm build
 
 ## Files To Read
 
-- `src/main.tsx` contains the whole example.
-- `src/main.test.tsx` verifies the app can render with a test-built container.
+- `src/App.tsx` contains the app, DI setup, and notes store.
+- `src/main.tsx` mounts the app in the browser.
+- `src/App.test.tsx` verifies the app can render with a test-built container.

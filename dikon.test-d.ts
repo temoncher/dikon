@@ -76,41 +76,38 @@ test('passes readonly dependencies to providers and overrides', () => {
 });
 
 test('infers required and provided dependencies', () => {
-  interface Config {
-    readonly baseUrl: string;
-  }
+  const createHttpClient = (baseUrl: string) => ({
+    get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+  });
+  const createPostsApi = (httpClient: ReturnType<typeof createHttpClient>) => ({
+    list: () => httpClient.get<readonly { id: number; title: string }[]>('/posts'),
+  });
 
   const builder = dikon()
-    .require<{ config: Config }>()
+    .require<{ config: { readonly baseUrl: string } }>()
     .provide({
-      httpClient({ config }) {
-        return {
-          get(path: string) {
-            return `${config.baseUrl}${path}`;
-          },
-        };
-      },
+      httpClient: ({ config }) => createHttpClient(config.baseUrl),
     })
     .provide({
-      getPosts({ httpClient }) {
-        return () => httpClient.get('/posts');
-      },
+      postsApi: ({ httpClient }) => createPostsApi(httpClient),
     });
 
   type Dependencies = dikon.Of<typeof builder>;
 
-  expectTypeOf<Dependencies['config']>().toEqualTypeOf<Config>();
+  expectTypeOf<Dependencies['config']>().toEqualTypeOf<{ readonly baseUrl: string }>();
   expectTypeOf<Dependencies['httpClient']>().toEqualTypeOf<{
-    get(path: string): string;
+    get<T>(path: string): Promise<T>;
   }>();
-  expectTypeOf<Dependencies['getPosts']>().toEqualTypeOf<() => string>();
+  expectTypeOf<Dependencies['postsApi']>().toEqualTypeOf<{
+    list(): Promise<readonly { id: number; title: string }[]>;
+  }>();
 
   // @ts-expect-error config is required
   builder.build();
 
-  const di = builder.build({ config: { baseUrl: 'https://api.test' } });
+  const di = builder.build({ config: { baseUrl: 'https://api.example.com' } });
 
-  assertType<string>(di.getPosts());
+  assertType<Promise<readonly { id: number; title: string }[]>>(di.postsApi.list());
 });
 
 test('does not add requirements for values that were already provided', () => {
@@ -324,27 +321,23 @@ test('dikon builders keep their type through pipe callbacks', () => {
 });
 
 test('types pipe callbacks from the current builder', () => {
-  interface Config {
-    readonly baseUrl: string;
-  }
+  const createHttpClient = (baseUrl: string) => ({
+    get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+  });
 
   const builder = dikon()
-    .require<{ config: Config }>()
+    .require<{ config: { readonly baseUrl: string } }>()
     .pipe((current) =>
       current.provide({
-        httpClient({ config }) {
-          return {
-            get(path: string) {
-              return `${config.baseUrl}${path}`;
-            },
-          };
-        },
+        httpClient: ({ config }) => createHttpClient(config.baseUrl),
       }),
     );
 
-  const di = builder.build({ config: { baseUrl: 'https://api.test' } });
+  const di = builder.build({ config: { baseUrl: 'https://api.example.com' } });
 
-  assertType<string>(di.httpClient.get('/posts'));
+  assertType<Promise<readonly { id: number; title: string }[]>>(
+    di.httpClient.get<readonly { id: number; title: string }[]>('/posts'),
+  );
 });
 
 test('allows pipe callbacks to return arbitrary values', () => {

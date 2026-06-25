@@ -118,48 +118,59 @@ describe('dikon', () => {
   });
 
   test('builds required and provided dependencies', () => {
-    interface Config {
-      readonly baseUrl: string;
-    }
+    const fetchMock = vi.fn<(path: string) => Promise<{ json: () => Promise<unknown> }>>(() =>
+      Promise.resolve({
+        json: () => Promise.resolve([{ id: 1, title: 'Hello' }]),
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const createHttpClient = (baseUrl: string) => ({
+      get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+    });
+    const createPostsApi = (httpClient: ReturnType<typeof createHttpClient>) => ({
+      list: () => httpClient.get<readonly { id: number; title: string }[]>('/posts'),
+    });
 
     const di = dikon()
-      .require<{ config: Config }>()
+      .require<{ config: { readonly baseUrl: string } }>()
       .provide({
-        httpClient({ config }) {
-          return {
-            get(path: string) {
-              return `${config.baseUrl}${path}`;
-            },
-          };
-        },
+        httpClient: ({ config }) => createHttpClient(config.baseUrl),
       })
       .provide({
-        getPosts({ httpClient }) {
-          return () => httpClient.get('/posts');
-        },
+        postsApi: ({ httpClient }) => createPostsApi(httpClient),
       })
-      .build({ config: { baseUrl: 'https://api.test' } });
+      .build({ config: { baseUrl: 'https://api.example.com' } });
 
-    expect(di.getPosts()).toBe('https://api.test/posts');
+    return expect(di.postsApi.list())
+      .resolves.toEqual([{ id: 1, title: 'Hello' }])
+      .then(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/posts'));
   });
 
   test('pipes the current builder into a function', () => {
+    const fetchMock = vi.fn<(path: string) => Promise<{ json: () => Promise<unknown> }>>(() =>
+      Promise.resolve({
+        json: () => Promise.resolve([{ id: 1, title: 'Hello' }]),
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const createHttpClient = (baseUrl: string) => ({
+      get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+    });
+
     const di = dikon()
       .require<{ config: { readonly baseUrl: string } }>()
       .pipe((builder) =>
         builder.provide({
-          httpClient({ config }) {
-            return {
-              get(path: string) {
-                return `${config.baseUrl}${path}`;
-              },
-            };
-          },
+          httpClient: ({ config }) => createHttpClient(config.baseUrl),
         }),
       )
-      .build({ config: { baseUrl: 'https://api.test' } });
+      .build({ config: { baseUrl: 'https://api.example.com' } });
 
-    expect(di.httpClient.get('/posts')).toBe('https://api.test/posts');
+    return expect(di.httpClient.get<readonly { id: number; title: string }[]>('/posts'))
+      .resolves.toEqual([{ id: 1, title: 'Hello' }])
+      .then(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/posts'));
   });
 
   test('returns arbitrary pipe results', () => {

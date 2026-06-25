@@ -13,7 +13,9 @@
   "scripts": {
     "lint": "oxlint --disable-nested-config",
     "lint:fix": "oxlint --disable-nested-config --fix",
-    "format": "oxfmt --write package.json tsconfig.json README.md dikon.ts dikon.test.ts dikon.test-d.ts dikon.perf.test-d.ts oxfmt.config.ts oxlint.config.ts vitest.config.ts && oxfmt --write examples/react-simple/package.json examples/react-simple/tsconfig.json examples/react-simple/oxfmt.config.ts examples/react-simple/oxlint.config.ts examples/react-simple/vite.config.ts examples/react-simple/vitest.config.ts examples/react-simple/src && oxfmt --write examples/react-complex/package.json examples/react-complex/tsconfig.json examples/react-complex/oxfmt.config.ts examples/react-complex/oxlint.config.ts examples/react-complex/vite.config.ts examples/react-complex/vitest.config.ts examples/react-complex/vitest.browser.config.ts examples/react-complex/src examples/react-complex/.storybook",
+    "format": "pnpm format:root && pnpm format:examples",
+    "format:root": "oxfmt --write -c oxfmt.config.ts --disable-nested-config \"*.{json,ts,md}\" \"!examples/**\"",
+    "format:examples": "pnpm --dir examples/react-simple format && pnpm --dir examples/react-complex format",
     "fix": "pnpm format && oxlint --disable-nested-config --fix",
     "test": "vitest run",
     "test:types": "vitest run --typecheck",

@@ -17,7 +17,9 @@ export default function CommitsRoute() {
       {commits.value?.length === 0 ? <p>{di.routeMetadata.emptyText}</p> : null}
       <ul
         className={
-          di.featureFlags.compactList ? 'repo-lens__list repo-lens__list--compact' : 'repo-lens__list'
+          di.featureFlags.compactList
+            ? 'repo-lens__list repo-lens__list--compact'
+            : 'repo-lens__list'
         }
       >
         {commits.value?.map((commit) => (

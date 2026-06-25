@@ -2,20 +2,16 @@
  * Creates a DI builder when called without arguments.
  *
  * ```ts
+ * const createHttpClient = (baseUrl: string) => ({
+ *     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+ * });
+ *
  * const di = dikon()
  *     .require<{ config: { readonly baseUrl: string } }>()
- *     .provide({
- *         httpClient({ config }) {
- *             return {
- *                 get(path: string) {
- *                     return fetch(`${config.baseUrl}${path}`).then((res) => res.json());
- *                 },
- *             };
- *         },
- *     })
- *     .build({ config: { baseUrl: 'https://api.test' } });
+ *     .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) })
+ *     .build({ config: { baseUrl: 'https://api.example.com' } });
  *
- * di.httpClient.get('/posts'); // fetches https://api.test/posts
+ * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
  * ```
  */
 export function dikon(): Dikon<{}, {}>;
@@ -24,23 +20,21 @@ export function dikon(): Dikon<{}, {}>;
  * returned function to builder `.pipe(...)`.
  *
  * ```ts
+ * const createHttpClient = (baseUrl: string) => ({
+ *     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+ * });
+ *
  * const withHttpClient = dikon((builder) =>
- *     builder.require<{ config: { readonly baseUrl: string } }>().provide({
- *         httpClient({ config }) {
- *             return {
- *                 get(path: string) {
- *                     return fetch(`${config.baseUrl}${path}`).then((res) => res.json());
- *                 },
- *             };
- *         },
- *     }),
+ *     builder
+ *         .require<{ config: { readonly baseUrl: string } }>()
+ *         .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) }),
  * );
  *
  * const di = dikon()
  *     .pipe(withHttpClient)
- *     .build({ config: { baseUrl: 'https://api.test' } });
+ *     .build({ config: { baseUrl: 'https://api.example.com' } });
  *
- * di.httpClient.get('/posts'); // fetches https://api.test/posts
+ * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
  * ```
  */
 export function dikon<TPlugin extends DikonPlugin>(fn: TPlugin): TPlugin;
@@ -109,20 +103,16 @@ export namespace dikon {
      * before this layer, including required values and parent services.
      *
      * ```ts
+     * const createHttpClient = (baseUrl: string) => ({
+     *     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+     * });
+     *
      * const di = dikon()
      *     .require<{ config: { readonly baseUrl: string } }>()
-     *     .provide({
-     *         httpClient({ config }) {
-     *             return {
-     *                 get(path: string) {
-     *                     return fetch(`${config.baseUrl}${path}`).then((res) => res.json());
-     *                 },
-     *             };
-     *         },
-     *     })
-     *     .build({ config: { baseUrl: 'https://api.test' } });
+     *     .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) })
+     *     .build({ config: { baseUrl: 'https://api.example.com' } });
      *
-     * di.httpClient.get('/posts'); // fetches https://api.test/posts
+     * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
      * ```
      */
     provide<TNewDeps extends { [K in keyof TNewDeps]: (di: Built<TExistingDeps>) => unknown }>(
@@ -229,27 +219,22 @@ export namespace dikon {
      * result. Use this to compose reusable builder plugins.
      *
      * ```ts
-     * function withHttpClient<TExistingDeps, TRequires>(
+     * const createHttpClient = (baseUrl: string) => ({
+     *     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
+     * });
+     *
+     * const withHttpClient = <TExistingDeps, TRequires>(
      *     builder: Dikon<TExistingDeps, TRequires>,
-     * ) {
-     *     return builder
+     * ) =>
+     *     builder
      *         .require<{ config: { readonly baseUrl: string } }>()
-     *         .provide({
-     *             httpClient({ config }) {
-     *                 return {
-     *                     get(path: string) {
-     *                         return fetch(`${config.baseUrl}${path}`).then((res) => res.json());
-     *                     },
-     *                 };
-     *             },
-     *         });
-     * }
+     *         .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) });
      *
      * const di = dikon()
      *     .pipe(withHttpClient)
-     *     .build({ config: { baseUrl: 'https://api.test' } });
+     *     .build({ config: { baseUrl: 'https://api.example.com' } });
      *
-     * di.httpClient.get('/posts'); // fetches https://api.test/posts
+     * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
      * ```
      */
     pipe<TResult>(fn: (builder: Dikon<TExistingDeps, TRequires>) => TResult): TResult;

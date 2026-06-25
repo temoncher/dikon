@@ -31,9 +31,7 @@ export function pathToRoute(path: string): AppRoute {
   }
 }
 
-export function createWouterRouterService(
-  navigate: (path: string) => void,
-): RouterService {
+export function createWouterRouterService(navigate: (path: string) => void): RouterService {
   // React owns browser routing; DI only receives route navigation commands.
   return {
     navigate: (route) => {
