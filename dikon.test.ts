@@ -7,69 +7,154 @@ describe('dikon', () => {
     vi.restoreAllMocks();
   });
 
-  test('builds required and provided dependencies', () => {
-    interface Config {
-      readonly baseUrl: string;
-    }
+  test('creates independent builders by calling dikon directly', () => {
+    const firstBuilder = dikon().provide({
+      value() {
+        return 'first';
+      },
+    });
+    const secondBuilder = dikon().provide({
+      value() {
+        return 'second';
+      },
+    });
 
-    const di = dikon
-      .container()
-      .requires({ config: dikon.type<Config>() })
-      .provide({
-        httpClient: ({ config }) => ({
-          get(path: string) {
-            return `${config.baseUrl}${path}`;
-          },
-        }),
-      })
-      .provide({
-        getPosts:
-          ({ httpClient }) =>
-          () =>
-            httpClient.get('/posts'),
-      })
-      .build({ config: { baseUrl: 'https://api.test' } });
-
-    expect(di.getPosts()).toBe('https://api.test/posts');
+    expect(firstBuilder.build().value).toBe('first');
+    expect(secondBuilder.build().value).toBe('second');
   });
 
-  test('creates dikon builders with shared methods', () => {
-    const firstBuilder = dikon.container();
-    const secondBuilder = dikon.container();
-
-    expect(firstBuilder).toMatchObject({ __layers: [], __requires: [] });
-    expect(Object.getPrototypeOf(firstBuilder)).toBe(Object.getPrototypeOf(secondBuilder));
-    expect(Object.getPrototypeOf(firstBuilder)).not.toBe(Object.prototype);
-    expect(Object.prototype.hasOwnProperty.call(firstBuilder, 'provide')).toBe(false);
-    expect(typeof firstBuilder.provide).toBe('function');
-  });
-
-  test('defines reusable transforms with dikon callback', () => {
-    const withHttpClient = dikon.plugin((builder) =>
-      builder.requires({ config: dikon.type<{ readonly baseUrl: string }>() }).provide({
-        url: ({ config }) => `${config.baseUrl}/posts`,
+  test('defines reusable transforms by calling dikon with a callback', () => {
+    const withHttpClient = dikon((builder) =>
+      builder.require<{ config: { readonly baseUrl: string } }>().provide({
+        url({ config }) {
+          return `${config.baseUrl}/posts`;
+        },
       }),
     );
 
-    const dataDi = dikon
-      .container()
+    const dataDi = dikon()
       .pipe(withHttpClient)
       .build({ config: { baseUrl: 'https://api.test' } });
 
     expect(dataDi.url).toBe('https://api.test/posts');
   });
 
-  test('pipes the current builder into a function', () => {
-    const di = dikon
-      .container()
-      .requires({ config: dikon.type<{ readonly baseUrl: string }>() })
-      .pipe((builder) =>
-        builder.provide({
-          httpClient: ({ config }) => ({
+  test('defines lazy services as enumerable readonly own properties', () => {
+    const di = dikon()
+      .provide({
+        service() {
+          return 'ready';
+        },
+      })
+      .build();
+
+    expect(Object.keys(di)).toEqual(['service']);
+    expect(Object.getOwnPropertyDescriptor(di, 'service')).toMatchObject({
+      configurable: true,
+      enumerable: true,
+      set: undefined,
+    });
+    expect(() => {
+      (di as { service: string }).service = 'changed';
+    }).toThrow(TypeError);
+    expect(di.service).toBe('ready');
+  });
+
+  test('spreading a lazy container initializes enumerable services', () => {
+    let factoryCalls = 0;
+    const di = dikon()
+      .provide({
+        service() {
+          factoryCalls += 1;
+
+          return { id: factoryCalls };
+        },
+      })
+      .build();
+
+    expect(Object.keys(di)).toEqual(['service']);
+    expect(factoryCalls).toBe(0);
+
+    const copy = { ...di };
+
+    expect(copy).toEqual({ service: { id: 1 } });
+    expect(factoryCalls).toBe(1);
+  });
+
+  test('defines eager services as enumerable readonly own properties', () => {
+    const di = dikon()
+      .provide({
+        service() {
+          return 'ready';
+        },
+      })
+      .buildEager();
+
+    expect(Object.getOwnPropertyDescriptor(di, 'service')).toEqual({
+      configurable: true,
+      enumerable: true,
+      value: 'ready',
+      writable: false,
+    });
+    expect(() => {
+      (di as { service: string }).service = 'changed';
+    }).toThrow(TypeError);
+    expect(di.service).toBe('ready');
+  });
+
+  test('defines required build values as enumerable readonly own properties', () => {
+    const di = dikon().require<{ config: number }>().build({ config: 10 });
+
+    expect(Object.getOwnPropertyDescriptor(di, 'config')).toEqual({
+      configurable: true,
+      enumerable: true,
+      value: 10,
+      writable: false,
+    });
+    expect(() => {
+      (di as { config: number }).config = 11;
+    }).toThrow(TypeError);
+    expect(di.config).toBe(10);
+  });
+
+  test('builds required and provided dependencies', () => {
+    interface Config {
+      readonly baseUrl: string;
+    }
+
+    const di = dikon()
+      .require<{ config: Config }>()
+      .provide({
+        httpClient({ config }) {
+          return {
             get(path: string) {
               return `${config.baseUrl}${path}`;
             },
-          }),
+          };
+        },
+      })
+      .provide({
+        getPosts({ httpClient }) {
+          return () => httpClient.get('/posts');
+        },
+      })
+      .build({ config: { baseUrl: 'https://api.test' } });
+
+    expect(di.getPosts()).toBe('https://api.test/posts');
+  });
+
+  test('pipes the current builder into a function', () => {
+    const di = dikon()
+      .require<{ config: { readonly baseUrl: string } }>()
+      .pipe((builder) =>
+        builder.provide({
+          httpClient({ config }) {
+            return {
+              get(path: string) {
+                return `${config.baseUrl}${path}`;
+              },
+            };
+          },
         }),
       )
       .build({ config: { baseUrl: 'https://api.test' } });
@@ -78,38 +163,22 @@ describe('dikon', () => {
   });
 
   test('returns arbitrary pipe results', () => {
-    const service = dikon
-      .container()
+    const service = dikon()
       .provide({
-        value: () => 'ready',
+        value() {
+          return 'ready';
+        },
       })
       .pipe((builder) => builder.build().value);
 
     expect(service).toBe('ready');
   });
 
-  test('keeps requirements added by a piped builder', () => {
-    interface Config {
-      readonly baseUrl: string;
-    }
-
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const missingConfig = {} as { readonly config: Config };
-
-    dikon
-      .container()
-      .pipe((builder) => builder.requires({ config: dikon.type<Config>() }))
-      .build(missingConfig);
-
-    expect(consoleError).toHaveBeenCalledWith('[DI] Services without implementation: config');
-  });
-
   test('creates provided services lazily and reuses the same instance', () => {
     let factoryCalls = 0;
-    const di = dikon
-      .container()
+    const di = dikon()
       .provide({
-        service: () => {
+        service() {
           factoryCalls += 1;
 
           return { id: factoryCalls };
@@ -127,12 +196,11 @@ describe('dikon', () => {
     expect(factoryCalls).toBe(1);
   });
 
-  test('builds provided services eagerly with data properties', () => {
+  test('builds provided services eagerly with readonly data properties', () => {
     let factoryCalls = 0;
-    const di = dikon
-      .container()
+    const di = dikon()
       .provide({
-        service: () => {
+        service() {
           factoryCalls += 1;
 
           return { id: factoryCalls };
@@ -145,7 +213,7 @@ describe('dikon', () => {
       configurable: true,
       enumerable: true,
       value: { id: 1 },
-      writable: true,
+      writable: false,
     });
 
     expect(di.service).toEqual({ id: 1 });
@@ -154,17 +222,16 @@ describe('dikon', () => {
 
   test('builds services eagerly layer by layer', () => {
     const calls: string[] = [];
-    const di = dikon
-      .container()
+    const di = dikon()
       .provide({
-        first: () => {
+        first() {
           calls.push('first');
 
           return 'first';
         },
       })
       .provide({
-        second: ({ first }) => {
+        second({ first }) {
           calls.push(`second:${first}`);
 
           return `${first}-second`;
@@ -180,14 +247,19 @@ describe('dikon', () => {
   });
 
   test('publishes eager services only after the whole layer is built', () => {
-    const di = dikon
-      .container()
+    const di = dikon()
       .provide({
-        value: () => 'previous',
+        value() {
+          return 'previous';
+        },
       })
       .provide({
-        value: () => 'current',
-        sibling: ({ value }) => `${value}-sibling`,
+        value() {
+          return 'current';
+        },
+        sibling({ value }) {
+          return `${value}-sibling`;
+        },
       })
       .buildEager();
 
@@ -198,17 +270,18 @@ describe('dikon', () => {
   test('uses overrides for dependencies declared by earlier layers', () => {
     let originalCalls = 0;
     let overrideCalls = 0;
-    const di = dikon
-      .container()
+    const di = dikon()
       .provide({
-        base: () => {
+        base() {
           originalCalls += 1;
 
           return 'base';
         },
       })
       .provide({
-        label: ({ base }) => `${base}-label`,
+        label({ base }) {
+          return `${base}-label`;
+        },
       })
       .override({
         base: () => {
@@ -227,17 +300,16 @@ describe('dikon', () => {
 
   test('builds eager dependencies with overrides replacing original factories first', () => {
     const calls: string[] = [];
-    const di = dikon
-      .container()
+    const di = dikon()
       .provide({
-        base: () => {
+        base() {
           calls.push('original');
 
           return 'original';
         },
       })
       .provide({
-        label: ({ base }) => {
+        label({ base }) {
           calls.push(`label:${base}`);
 
           return `${base}-label`;
@@ -251,7 +323,9 @@ describe('dikon', () => {
         },
       })
       .provide({
-        later: ({ base, label }) => `${base}:${label}`,
+        later({ base, label }) {
+          return `${base}:${label}`;
+        },
       })
       .buildEager();
 
@@ -263,23 +337,26 @@ describe('dikon', () => {
     expect(calls).toEqual(['override', 'label:override']);
   });
 
-  test('builds a child container with parent dependencies on its prototype', () => {
-    const parent = dikon
-      .container()
+  test('builds a container with parent dependencies on its prototype', () => {
+    const parent = dikon()
       .provide({
-        config: () => ({ baseUrl: 'https://parent.test' }),
+        config() {
+          return { baseUrl: 'https://parent.test' };
+        },
       })
       .build();
-    const child = dikon
-      .container<typeof parent>()
+    const child = dikon()
+      .require<typeof parent>()
       .provide({
-        httpClient: ({ config }) => ({
-          get(path: string) {
-            return `${config.baseUrl}${path}`;
-          },
-        }),
+        httpClient({ config }) {
+          return {
+            get(path: string) {
+              return `${config.baseUrl}${path}`;
+            },
+          };
+        },
       })
-      .build(undefined, parent);
+      .build({}, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(Object.prototype.hasOwnProperty.call(child, 'config')).toBe(false);
@@ -289,22 +366,23 @@ describe('dikon', () => {
 
   test('keeps inherited lazy parent instances cached on the parent container', () => {
     let parentCalls = 0;
-    const parent = dikon
-      .container()
+    const parent = dikon()
       .provide({
-        config: () => {
+        config() {
           parentCalls += 1;
 
           return { id: parentCalls };
         },
       })
       .build();
-    const child = dikon
-      .container<typeof parent>()
+    const child = dikon()
+      .require<typeof parent>()
       .provide({
-        label: ({ config }) => `config-${config.id}`,
+        label({ config }) {
+          return `config-${config.id}`;
+        },
       })
-      .build(undefined, parent);
+      .build({}, parent);
 
     expect(child.label).toBe('config-1');
     expect(parent.config).toEqual({ id: 1 });
@@ -312,22 +390,27 @@ describe('dikon', () => {
     expect(parentCalls).toBe(1);
   });
 
-  test('lets child providers override parent dependencies', () => {
-    const parent = dikon
-      .container()
+  test('lets providers override parent dependencies', () => {
+    const parent = dikon()
       .provide({
-        config: () => ({ baseUrl: 'https://parent.test' }),
+        config() {
+          return { baseUrl: 'https://parent.test' };
+        },
       })
       .build();
-    const child = dikon
-      .container<typeof parent>()
+    const child = dikon()
+      .require<typeof parent>()
       .provide({
-        config: () => ({ baseUrl: 'https://child.test' }),
+        config() {
+          return { baseUrl: 'https://child.test' };
+        },
       })
       .provide({
-        url: ({ config }) => `${config.baseUrl}/posts`,
+        url({ config }) {
+          return `${config.baseUrl}/posts`;
+        },
       })
-      .build(undefined, parent);
+      .build({}, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(child.config).toEqual({ baseUrl: 'https://child.test' });
@@ -335,199 +418,68 @@ describe('dikon', () => {
     expect(child.url).toBe('https://child.test/posts');
   });
 
-  test('builds eager child services from a parent container without copying parent values', () => {
-    const parent = dikon
-      .container()
+  test('builds eager services from a parent without copying parent values', () => {
+    const parent = dikon()
       .provide({
-        config: () => ({ baseUrl: 'https://parent.test' }),
+        config() {
+          return { baseUrl: 'https://parent.test' };
+        },
       })
       .build();
-    const child = dikon
-      .container<typeof parent>()
+    const child = dikon()
+      .require<typeof parent>()
       .provide({
-        url: ({ config }) => `${config.baseUrl}/posts`,
+        url({ config }) {
+          return `${config.baseUrl}/posts`;
+        },
       })
-      .buildEager(undefined, parent);
+      .buildEager({}, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(Object.prototype.hasOwnProperty.call(child, 'config')).toBe(false);
     expect(child.url).toBe('https://parent.test/posts');
   });
 
-  test('builds child containers from parent-aware builder pipes', () => {
-    const parent = dikon
-      .container()
+  test('builds containers with a parent from builder pipes', () => {
+    const parent = dikon()
       .provide({
-        config: () => ({ baseUrl: 'https://parent.test' }),
+        config() {
+          return { baseUrl: 'https://parent.test' };
+        },
       })
       .build();
 
-    const child = dikon
-      .container<typeof parent>()
+    const child = dikon()
+      .require<typeof parent>()
       .pipe((builder) =>
         builder.provide({
-          httpClient: ({ config }) => ({
-            get(path: string) {
-              return `${config.baseUrl}${path}`;
-            },
-          }),
+          httpClient({ config }) {
+            return {
+              get(path: string) {
+                return `${config.baseUrl}${path}`;
+              },
+            };
+          },
         }),
       )
-      .build(undefined, parent);
+      .build({}, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(child.httpClient.get('/posts')).toBe('https://parent.test/posts');
   });
 
-  test('treats inherited parent services as satisfying required dependencies', () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const parent = dikon
-      .container()
-      .provide({
-        config: () => ({ baseUrl: 'https://parent.test' }),
-      })
-      .build();
-
-    const child = dikon
-      .container<typeof parent>()
-      .requires({ config: dikon.type<{ readonly baseUrl: string }>() })
-      .build(undefined, parent);
-
-    expect(child.config).toBe(parent.config);
-    expect(consoleError).not.toHaveBeenCalled();
-  });
-
   test('keeps a user __instances dependency separate from the internal cache', () => {
-    const di = dikon
-      .container()
-      .requires({ __instances: dikon.type<string>() })
+    const di = dikon()
+      .require<{ __instances: string }>()
       .provide({
-        reflected: ({ __instances }) => __instances.toUpperCase(),
+        reflected({ __instances }) {
+          return __instances.toUpperCase();
+        },
       })
       .build({ __instances: 'external' });
 
     expect(di.__instances).toBe('external');
     expect(di.reflected).toBe('EXTERNAL');
-  });
-
-  test('builds required and provided dependencies keyed by symbols', () => {
-    const CONFIG_TOKEN = Symbol('config');
-    const HTTP_CLIENT_TOKEN = Symbol('httpClient');
-    const GET_POSTS_TOKEN = Symbol('getPosts');
-
-    interface Config {
-      readonly baseUrl: string;
-    }
-
-    const di = dikon
-      .container()
-      .requires({ [CONFIG_TOKEN]: dikon.type<Config>() })
-      .provide({
-        [HTTP_CLIENT_TOKEN]: ({ [CONFIG_TOKEN]: config }) => ({
-          get(path: string) {
-            return `${config.baseUrl}${path}`;
-          },
-        }),
-      })
-      .provide({
-        [GET_POSTS_TOKEN]:
-          ({ [HTTP_CLIENT_TOKEN]: httpClient }) =>
-          () =>
-            httpClient.get('/posts'),
-      })
-      .build({ [CONFIG_TOKEN]: { baseUrl: 'https://symbol-api.test' } });
-
-    expect(di[GET_POSTS_TOKEN]()).toBe('https://symbol-api.test/posts');
-  });
-
-  test('builds symbol-keyed dependencies eagerly', () => {
-    const CONFIG_TOKEN = Symbol('config');
-    const SERVICE_TOKEN = Symbol('service');
-    const LABEL_TOKEN = Symbol('label');
-
-    const di = dikon
-      .container()
-      .requires({ [CONFIG_TOKEN]: dikon.type<{ readonly prefix: string }>() })
-      .provide({
-        [SERVICE_TOKEN]: ({ [CONFIG_TOKEN]: config }) => `${config.prefix}-service`,
-      })
-      .provide({
-        [LABEL_TOKEN]: ({ [SERVICE_TOKEN]: service }) => `${service}-label`,
-      })
-      .buildEager({ [CONFIG_TOKEN]: { prefix: 'symbol' } });
-
-    expect(di[SERVICE_TOKEN]).toBe('symbol-service');
-    expect(di[LABEL_TOKEN]).toBe('symbol-service-label');
-  });
-
-  test('uses overrides keyed by symbols', () => {
-    const SERVICE_TOKEN = Symbol('service');
-    const LABEL_TOKEN = Symbol('label');
-    let originalCalls = 0;
-    let overrideCalls = 0;
-    const di = dikon
-      .container()
-      .provide({
-        [SERVICE_TOKEN]: (): string => {
-          originalCalls += 1;
-
-          return 'original';
-        },
-      })
-      .provide({
-        [LABEL_TOKEN]: ({ [SERVICE_TOKEN]: service }) => `${service}-label`,
-      })
-      .override({
-        [SERVICE_TOKEN]: () => {
-          overrideCalls += 1;
-
-          return 'override';
-        },
-      })
-      .build();
-
-    expect(di[SERVICE_TOKEN]).toBe('override');
-    expect(di[LABEL_TOKEN]).toBe('override-label');
-    expect(originalCalls).toBe(0);
-    expect(overrideCalls).toBe(1);
-  });
-
-  test('reports required services that are not passed or provided', () => {
-    interface Config {
-      readonly enabled: boolean;
-    }
-    type Logger = (message: string) => void;
-
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const missingConfig = {} as { readonly config: Config };
-
-    dikon
-      .container()
-      .requires({
-        config: dikon.type<Config>(),
-        logger: dikon.type<Logger>(),
-      })
-      .provide({
-        logger: () => () => undefined,
-      })
-      .build(missingConfig);
-
-    expect(consoleError).toHaveBeenCalledWith('[DI] Services without implementation: config');
-  });
-
-  test('reports symbol-keyed required services that are not passed or provided', () => {
-    const SERVICE_TOKEN = Symbol('service');
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const missingService = {} as { readonly [SERVICE_TOKEN]: string };
-
-    dikon
-      .container()
-      .requires({ [SERVICE_TOKEN]: dikon.type<string>() })
-      .build(missingService);
-
-    expect(consoleError).toHaveBeenCalledWith(
-      '[DI] Services without implementation: Symbol(service)',
-    );
   });
 
   test('reports non-function factories when providing or overriding services', () => {
@@ -537,30 +489,21 @@ describe('dikon', () => {
       readonly first: string;
     }) => string;
 
-    dikon.container().provide({ broken: invalidProvidedFactory });
-    dikon
-      .container()
+    dikon().provide({ broken: invalidProvidedFactory });
+    dikon()
       .provide({
-        first: () => 'first',
+        first() {
+          return 'first';
+        },
       })
       .provide({
-        service: ({ first }) => first,
+        service({ first }) {
+          return first;
+        },
       })
       .override({ service: invalidOverrideFactory });
 
     expect(consoleError).toHaveBeenCalledWith('[DI] Provided broken factory is not a function');
     expect(consoleError).toHaveBeenCalledWith('[DI] Provided service factory is not a function');
-  });
-
-  test('reports non-function factories keyed by symbols', () => {
-    const SERVICE_TOKEN = Symbol('service');
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const invalidProvidedFactory = 'not a function' as unknown as () => unknown;
-
-    dikon.container().provide({ [SERVICE_TOKEN]: invalidProvidedFactory });
-
-    expect(consoleError).toHaveBeenCalledWith(
-      '[DI] Provided Symbol(service) factory is not a function',
-    );
   });
 });

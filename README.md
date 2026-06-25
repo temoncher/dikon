@@ -19,8 +19,8 @@ import { dikon } from './dikon';
 
 ## Basic Usage
 
-Declare required values with `dikon.type<T>()`, provide services in layers, and call `build()` with
-the required values.
+Declare required values with `.require<T>()`, provide services in layers, and call `build()` with the
+required values.
 
 ```ts
 import { dikon } from './dikon';
@@ -29,21 +29,21 @@ interface Config {
   readonly baseUrl: string;
 }
 
-const di = dikon
-  .container()
-  .requires({ config: dikon.type<Config>() })
+const di = dikon()
+  .require<{ config: Config }>()
   .provide({
-    httpClient: ({ config }) => ({
-      get(path: string) {
-        return `${config.baseUrl}${path}`;
-      },
-    }),
+    httpClient({ config }) {
+      return {
+        get(path: string) {
+          return `${config.baseUrl}${path}`;
+        },
+      };
+    },
   })
   .provide({
-    getPosts:
-      ({ httpClient }) =>
-      () =>
-        httpClient.get('/posts'),
+    getPosts({ httpClient }) {
+      return () => httpClient.get('/posts');
+    },
   })
   .build({ config: { baseUrl: 'https://api.test' } });
 
@@ -55,59 +55,52 @@ result is cached on that container.
 
 Use `buildEager()` when you want all providers constructed during the build step.
 
-## Plugins
-
-Use `dikon.plugin(...)` to package reusable builder steps, then pass the plugin to `.pipe(...)`.
-
-```ts
-const withHttpClient = dikon.plugin((builder) =>
-  builder.requires({ config: dikon.type<{ readonly baseUrl: string }>() }).provide({
-    httpClient: ({ config }) => ({
-      get(path: string) {
-        return `${config.baseUrl}${path}`;
-      },
-    }),
-  }),
-);
-
-const di = dikon
-  .container()
-  .pipe(withHttpClient)
-  .build({ config: { baseUrl: 'https://api.test' } });
-```
+Built containers expose local build values and services as own enumerable properties. Those
+properties are shallow readonly: you cannot replace `di.service`, but the service object can still
+manage its own state. Spreading a lazy container reads its enumerable services, so it initializes
+them.
 
 ## Parent Containers
 
-A container can inherit from a parent container. Child services read their own values first and then
-fall back to the parent through the prototype chain.
+A container can read from a parent container. Local build values and local providers take
+precedence, then missing values fall through to the parent through the prototype chain. Inherited
+lazy services stay cached on the parent that defined them.
 
 ```ts
-const parent = dikon
-  .container()
+const rootDi = dikon()
   .provide({
-    config: () => ({ baseUrl: 'https://parent.test' }),
+    config() {
+      return { baseUrl: 'https://root.test' };
+    },
   })
   .build();
 
-const child = dikon
-  .container<typeof parent>()
+const app = dikon()
+  .require<typeof rootDi>()
+  .require<{ path: string }>()
   .provide({
-    url: ({ config }) => `${config.baseUrl}/posts`,
+    url({ config, path }) {
+      return `${config.baseUrl}${path}`;
+    },
   })
-  .build(undefined, parent);
+  .build({ path: '/posts' }, rootDi);
 
-child.url; // "https://parent.test/posts"
+app.url; // "https://root.test/posts"
 ```
+
+Calling `.require<T>()` is type-only. Use it when a parent container, test builder, or earlier
+provider will satisfy those values.
 
 ## Overrides
 
 Use `.override(...)` to replace a service that already exists while preserving its public type.
 
 ```ts
-const di = dikon
-  .container()
+const di = dikon()
   .provide({
-    clock: () => ({ now: () => Date.now() }),
+    clock() {
+      return { now: () => Date.now() };
+    },
   })
   .override({
     clock: () => ({ now: () => 0 }),
@@ -115,26 +108,6 @@ const di = dikon
   .build();
 
 di.clock.now(); // 0
-```
-
-## Symbol Keys
-
-Dikon supports string, number, and symbol property keys. Symbol keys are useful when you want to
-avoid accidental name collisions.
-
-```ts
-const CONFIG = Symbol('config');
-const URL = Symbol('url');
-
-const di = dikon
-  .container()
-  .requires({ [CONFIG]: dikon.type<{ readonly baseUrl: string }>() })
-  .provide({
-    [URL]: ({ [CONFIG]: config }) => `${config.baseUrl}/posts`,
-  })
-  .build({ [CONFIG]: { baseUrl: 'https://api.test' } });
-
-di[URL]; // "https://api.test/posts"
 ```
 
 ## Development
@@ -151,3 +124,100 @@ pnpm format
 ```
 
 The package is marked `"private": true` because Dikon is intended to be copied, not published.
+
+## Symbol Keys
+
+Dikon uses normal JavaScript property keys, so symbol-keyed services also work. Reach for this only
+when a string key would be too easy to collide with.
+
+```ts
+const CONFIG = Symbol('config');
+const URL = Symbol('url');
+
+const di = dikon()
+  .require<{ [CONFIG]: { readonly baseUrl: string } }>()
+  .provide({
+    [URL]({ [CONFIG]: config }) {
+      return `${config.baseUrl}/posts`;
+    },
+  })
+  .build({ [CONFIG]: { baseUrl: 'https://api.test' } });
+
+di[URL]; // "https://api.test/posts"
+```
+
+## Plugins
+
+Use `dikon(...)` to package reusable builder steps, then pass the plugin to `.pipe(...)`.
+
+```ts
+const withHttpClient = dikon((builder) =>
+  builder.require<{ config: { readonly baseUrl: string } }>().provide({
+    httpClient({ config }) {
+      return {
+        get(path: string) {
+          return `${config.baseUrl}${path}`;
+        },
+      };
+    },
+  }),
+);
+
+const di = dikon()
+  .pipe(withHttpClient)
+  .build({ config: { baseUrl: 'https://api.test' } });
+```
+
+## If You Really Need Disposal
+
+Dikon does not manage lifetimes. Most frontend, Storybook, and test containers can just let normal
+garbage collection handle unused instances. If a backend request container opens something that must
+be closed deterministically, keep cleanup as ordinary services instead of adding lifecycle rules to
+every provider.
+
+```ts
+const withDisposal = dikon((builder) =>
+  builder
+    .provide({
+      disposables(): Array<() => void | Promise<void>> {
+        return [];
+      },
+    })
+    .provide({
+      defer({ disposables }) {
+        return (dispose: () => void | Promise<void>) => {
+          disposables.push(dispose);
+        };
+      },
+      dispose({ disposables }) {
+        return async () => {
+          for (const dispose of [...disposables].reverse()) {
+            await dispose();
+          }
+        };
+      },
+    }),
+);
+
+const requestDi = dikon()
+  .pipe(withDisposal)
+  .provide({
+    connection({ defer }) {
+      const connection = openConnection();
+
+      defer(() => connection.close());
+
+      return connection;
+    },
+  })
+  .build({ request }, app);
+
+try {
+  await handleRequest(requestDi);
+} finally {
+  await requestDi.dispose();
+}
+```
+
+Lazy providers only register cleanup if they are actually read. If you need a different disposal
+order or error policy, keep that policy in this local recipe.
