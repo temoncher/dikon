@@ -18,7 +18,7 @@ test('types callable dikon builders and plugins', () => {
     }),
   );
 
-  const child = dikon().require<typeof parent>().pipe(plugin).build({}, parent);
+  const child = dikon().require<typeof parent>().pipe(plugin).build(undefined, parent);
 
   assertType<number>(child.fortyTwo);
 });
@@ -147,7 +147,7 @@ test('types parent containers with builder methods', () => {
         return `${config.baseUrl}/posts`;
       },
     });
-  const child = childBuilder.build({}, parent);
+  const child = childBuilder.build(undefined, parent);
 
   assertType<string>(child.url);
   expectTypeOf(child.config).toEqualTypeOf<typeof parent.config>();
@@ -178,7 +178,7 @@ test('keeps local requirements in the first build argument', () => {
   childBuilder.buildEager({ seed: 'posts' }, parent);
 
   // @ts-expect-error seed is still required even when a parent is passed
-  childBuilder.build({}, parent);
+  childBuilder.build(undefined, parent);
 });
 
 test('types parent containers with single-callback builder pipes', () => {
@@ -199,7 +199,7 @@ test('types parent containers with single-callback builder pipes', () => {
         },
       }),
     )
-    .build({}, parent);
+    .build(undefined, parent);
 
   assertType<string>(child.url);
   expectTypeOf(child.config).toEqualTypeOf<typeof parent.config>();

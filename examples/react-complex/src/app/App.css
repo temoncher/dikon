@@ -1,0 +1,196 @@
+:root {
+  color: #15191d;
+  background: #f4f6f8;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button {
+  min-height: 38px;
+  border: 1px solid #2d5b7a;
+  border-radius: 6px;
+  padding: 0 14px;
+  color: #f8fbfd;
+  background: #2d5b7a;
+  cursor: pointer;
+  font: inherit;
+}
+
+button:hover {
+  background: #21455e;
+}
+
+button[aria-pressed='true'] {
+  border-color: #28543f;
+  background: #28543f;
+}
+
+a {
+  color: #1e5d8a;
+}
+
+#root {
+  min-height: 100vh;
+  display: grid;
+  place-items: start center;
+  padding: 42px 16px;
+}
+
+.repo-lens {
+  width: min(100%, 840px);
+  padding: 28px;
+  border: 1px solid #d8dee5;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 22px 64px rgb(28 40 51 / 11%);
+}
+
+.repo-lens__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.repo-lens__eyebrow,
+.repo-lens__section-title {
+  margin: 0 0 8px;
+  color: #66727c;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.repo-lens h1,
+.repo-lens h2 {
+  margin: 0;
+  line-height: 1.05;
+}
+
+.repo-lens h1 {
+  font-size: 2.7rem;
+}
+
+.repo-lens h2 {
+  font-size: 1.7rem;
+}
+
+.repo-lens__tagline {
+  max-width: 42rem;
+  margin: 10px 0 0;
+  color: #4c5964;
+  line-height: 1.5;
+}
+
+.repo-lens__nav,
+.repo-lens__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.repo-lens__nav button {
+  min-width: 94px;
+}
+
+.repo-lens__panel {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid #d8dee5;
+  padding-top: 22px;
+}
+
+.repo-lens__loading {
+  margin: 0;
+  color: #66727c;
+}
+
+.repo-lens__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.repo-lens__stats div,
+.repo-lens__list li {
+  border: 1px solid #d8dee5;
+  border-radius: 6px;
+  padding: 12px;
+  background: #f8fafb;
+}
+
+.repo-lens__stats dt {
+  color: #66727c;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.repo-lens__stats dd {
+  margin: 4px 0 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.repo-lens__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.repo-lens__list li {
+  display: grid;
+  gap: 6px;
+}
+
+.repo-lens__list--compact {
+  gap: 6px;
+}
+
+.repo-lens__list--compact li {
+  padding: 8px 10px;
+}
+
+.repo-lens__list span {
+  color: #66727c;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 680px) {
+  #root {
+    padding: 18px 10px;
+  }
+
+  .repo-lens {
+    padding: 18px;
+  }
+
+  .repo-lens__header,
+  .repo-lens__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .repo-lens h1 {
+    font-size: 2rem;
+  }
+}

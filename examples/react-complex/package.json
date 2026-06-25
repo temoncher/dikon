@@ -1,0 +1,43 @@
+{
+  "name": "dikon-example-react-complex",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit --project tsconfig.json && vite build",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt --write .",
+    "fix": "oxfmt --write . && oxlint --fix",
+    "test": "vitest run --config vitest.config.ts",
+    "test:component": "vitest run --config vitest.config.ts",
+    "test:screenshot": "vitest run --config vitest.browser.config.ts",
+    "storybook": "storybook dev -p 6006 --no-open",
+    "build-storybook": "storybook build"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "wouter": "3.0.0"
+  },
+  "devDependencies": {
+    "@storybook/react-vite": "^10.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@vitest/browser-playwright": "^4.0.0",
+    "jsdom": "^27.0.0",
+    "oxfmt": "0.52.0",
+    "oxlint": "^1.71.0",
+    "playwright": "^1.56.0",
+    "storybook": "^10.0.0",
+    "typescript": "5.7.2",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0",
+    "vitest-browser-react": "^2.0.0"
+  }
+}

@@ -88,6 +88,13 @@ const app = dikon()
 app.url; // "https://root.test/posts"
 ```
 
+If the child container has no local required values and only needs a parent, pass `undefined` as the
+first build argument:
+
+```ts
+const child = childBuilder.build(undefined, parent);
+```
+
 Calling `.require<T>()` is type-only. Use it when a parent container, test builder, or earlier
 provider will satisfy those values.
 
@@ -124,6 +131,47 @@ pnpm format
 ```
 
 The package is marked `"private": true` because Dikon is intended to be copied, not published.
+
+## Examples
+
+The React examples show two different adoption levels.
+
+[`examples/react-simple`](./examples/react-simple) is the smallest useful shape: one app, one
+container builder, no React context, and the built container passed through props.
+See [`examples/react-simple/README.md`](./examples/react-simple/README.md) for the walkthrough.
+
+```sh
+cd examples/react-simple
+pnpm install
+pnpm dev
+pnpm test
+```
+
+[`examples/react-complex`](./examples/react-complex) is a developer-facing Repo Lens app wired to
+the public GitHub API. It shows:
+
+- an app shell that adapts the `wouter` router into a small service before DI,
+- a root container that accepts those externally initialized services,
+- lazy route folders that each build their own child container,
+- a declared feature flag plugin factory that requires root flag infrastructure,
+- deterministic tests and stories that replace the live HTTP client through DI.
+
+See [`examples/react-complex/README.md`](./examples/react-complex/README.md) for the route and DI
+walkthrough.
+
+That split is the reason to reach for hierarchical containers in a frontend: React-owned services
+such as router state, HTTP clients, auth, flags, or telemetry can exist before a route is
+downloaded, while route containers can be loaded and built later with route-local config and
+dependencies.
+
+```sh
+cd examples/react-complex
+pnpm install
+pnpm dev
+pnpm test
+pnpm test:screenshot
+pnpm storybook
+```
 
 ## Symbol Keys
 

@@ -356,7 +356,7 @@ describe('dikon', () => {
           };
         },
       })
-      .build({}, parent);
+      .build(undefined, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(Object.prototype.hasOwnProperty.call(child, 'config')).toBe(false);
@@ -382,7 +382,7 @@ describe('dikon', () => {
           return `config-${config.id}`;
         },
       })
-      .build({}, parent);
+      .build(undefined, parent);
 
     expect(child.label).toBe('config-1');
     expect(parent.config).toEqual({ id: 1 });
@@ -410,7 +410,7 @@ describe('dikon', () => {
           return `${config.baseUrl}/posts`;
         },
       })
-      .build({}, parent);
+      .build(undefined, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(child.config).toEqual({ baseUrl: 'https://child.test' });
@@ -462,7 +462,7 @@ describe('dikon', () => {
           },
         }),
       )
-      .build({}, parent);
+      .build(undefined, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(child.httpClient.get('/posts')).toBe('https://parent.test/posts');

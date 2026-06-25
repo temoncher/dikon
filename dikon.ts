@@ -176,10 +176,13 @@ export namespace dikon {
      *             return `${config.baseUrl}/posts`;
      *         },
      *     })
-     *     .build({}, parent);
+     *     .build(undefined, parent);
      *
      * child.url; // 'https://api.test/posts'
      * ```
+     *
+     * Pass `undefined` as the first argument when the child has no local
+     * required values and only needs a parent container.
      *
      * When a parent object is passed, the container uses it as its prototype.
      * Local required values and services shadow parent values. If the parent
