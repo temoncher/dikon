@@ -24,11 +24,10 @@ function createRepositoryConfig({ appConfig }: RootBuildValues): RepositoryConfi
   };
 }
 
-export function createRootDi() {
-  // Root DI accepts React-owned services flat, then derives shared values for lazy route DI.
-  return dikon().require<RootBuildValues>().provide({
-    repositoryConfig: createRepositoryConfig,
-  });
-}
+// Root DI accepts React-owned services flat, then derives shared values for lazy route DI.
+// The dikon is composed once at module scope and built (never mutated) per provider.
+export const rootDikon = dikon().require<RootBuildValues>().provide({
+  repositoryConfig: createRepositoryConfig,
+});
 
-export type RootDi = dikon.Of<ReturnType<typeof createRootDi>>;
+export type RootDi = dikon.Of<typeof rootDikon>;

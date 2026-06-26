@@ -88,10 +88,10 @@ If the child container has no local required values and only needs a parent, pas
 first build argument:
 
 ```ts
-const child = childBuilder.build(undefined, parent);
+const child = childDikon.build(undefined, parent);
 ```
 
-Calling `.require<T>()` is type-only. Use it when a parent container, test builder, or earlier
+Calling `.require<T>()` is type-only. Use it when a parent container, test dikon, or earlier
 provider will satisfy those values.
 
 ## Overrides
@@ -133,7 +133,7 @@ The package is marked `"private": true` because Dikon is intended to be copied, 
 The React examples show two different adoption levels.
 
 [`examples/react-simple`](./examples/react-simple) is the smallest useful shape: one app, one
-container builder, no React context, and the built container passed through props.
+dikon, no React context, and the built container passed through props.
 See [`examples/react-simple/README.md`](./examples/react-simple/README.md) for the walkthrough.
 
 ```sh
@@ -149,7 +149,7 @@ the public GitHub API. It shows:
 - an app shell that adapts the `wouter` router into a small service before DI,
 - a root container that accepts those externally initialized services,
 - lazy route folders that each build their own child container,
-- a reusable feature flag pipe function that requires root flag infrastructure,
+- a reusable feature flag dikon that requires root flag infrastructure,
 - deterministic tests and stories that replace the live HTTP client through DI.
 
 See [`examples/react-complex/README.md`](./examples/react-complex/README.md) for the route and DI
@@ -190,14 +190,32 @@ const di = dikon()
 di[URL]; // "https://api.test/posts"
 ```
 
-## Reusable Pipe Functions
+## Reusable Dikons
 
-`.pipe(...)` passes the current builder to a function and returns that function's result. Use it
-when you want to stay in the builder chain while calling a helper, extracting a reusable builder
-step, or returning some derived value.
+`.use(...)` merges another standalone dikon — its own `dikon()` chain — into the current one. Its
+services become available here and satisfy any matching requirements; requirements it declares that
+the current dikon does not already supply bubble up to build time.
 
-Reusable pipe functions are just functions. If you want TypeScript to infer the builder parameter
-without writing the generics yourself, use `satisfies dikon.PipeFn`.
+Because that dikon is authored from `dikon()` with concrete types, it is type-checked once, in
+isolation. That is the difference from threading a generically-typed dikon through a helper: there
+are no free `TExistingDeps`/`TRequires` parameters to re-instantiate at each call site, and a dikon
+defined once pays its type-checking cost once no matter how many places `use` it.
+
+Dikons are immutable. `provide`, `override`, and `use` return a new dikon rather than mutating the
+one they were called on, and `build(...)` never mutates either. So you can compose a dikon once at
+module scope, export it, and `build(...)` it repeatedly — each build is independent, and branching
+with `override(...)` for a test or story cannot leak back into the shared dikon.
+
+```ts
+export const appDi = dikon()
+  .require<{ config: { readonly baseUrl: string } }>()
+  .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) });
+
+// In a test: override branches off a copy; the exported appDi is untouched.
+const testDi = appDi
+  .override({ httpClient: () => fakeHttpClient })
+  .build({ config: { baseUrl: 'https://api.test' } });
+```
 
 ```ts
 const createHttpClient = (baseUrl: string) => ({
@@ -208,26 +226,29 @@ const createPostsApi = (httpClient: ReturnType<typeof createHttpClient>) => ({
   list: () => httpClient.get<readonly { id: number; title: string }[]>('/posts'),
 });
 
-const withHttpClient = ((builder) =>
-  builder.require<{ config: { readonly baseUrl: string } }>().provide({
+const httpClientDikon = dikon()
+  .require<{ config: { readonly baseUrl: string } }>()
+  .provide({
     httpClient: ({ config }) => createHttpClient(config.baseUrl),
-  })) satisfies dikon.PipeFn;
+  });
 
 const di = dikon()
-  .pipe(withHttpClient)
+  .use(httpClientDikon)
   .provide({
     postsApi: ({ httpClient }) => createPostsApi(httpClient),
   })
   .build({ config: { baseUrl: 'https://api.example.com' } });
 ```
 
-You can also write the generic function explicitly if you prefer not to use `satisfies`:
+A dikon factory just returns a dikon, so it can be parameterized like any other function:
 
 ```ts
-function withHttpClient<TExistingDeps, TRequires>(builder: dikon.Dikon<TExistingDeps, TRequires>) {
-  return builder.require<{ config: { readonly baseUrl: string } }>().provide({
-    httpClient: ({ config }) => createHttpClient(config.baseUrl),
-  });
+function createHttpClientDikon(defaultHeaders: Readonly<Record<string, string>>) {
+  return dikon()
+    .require<{ config: { readonly baseUrl: string } }>()
+    .provide({
+      httpClient: ({ config }) => createHttpClient(config.baseUrl, defaultHeaders),
+    });
 }
 ```
 
@@ -239,30 +260,29 @@ be closed deterministically, keep cleanup as ordinary services instead of adding
 every provider.
 
 ```ts
-const withDisposal = ((builder) =>
-  builder
-    .provide({
-      disposables(): Array<() => void | Promise<void>> {
-        return [];
-      },
-    })
-    .provide({
-      defer({ disposables }) {
-        return (dispose: () => void | Promise<void>) => {
-          disposables.push(dispose);
-        };
-      },
-      dispose({ disposables }) {
-        return async () => {
-          for (const dispose of [...disposables].reverse()) {
-            await dispose();
-          }
-        };
-      },
-    })) satisfies dikon.PipeFn;
+const disposalDikon = dikon()
+  .provide({
+    disposables(): Array<() => void | Promise<void>> {
+      return [];
+    },
+  })
+  .provide({
+    defer({ disposables }) {
+      return (dispose: () => void | Promise<void>) => {
+        disposables.push(dispose);
+      };
+    },
+    dispose({ disposables }) {
+      return async () => {
+        for (const dispose of [...disposables].reverse()) {
+          await dispose();
+        }
+      };
+    },
+  });
 
 const requestDi = dikon()
-  .pipe(withDisposal)
+  .use(disposalDikon)
   .provide({
     connection({ defer }) {
       const connection = openConnection();

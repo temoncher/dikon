@@ -1,3 +1,3 @@
-export { createRootDi } from './createRootDi';
+export { rootDikon } from './rootDi';
 export { RootDiContext } from './RootDiContext';
-export type { RootDi } from './createRootDi';
+export type { RootDi } from './rootDi';

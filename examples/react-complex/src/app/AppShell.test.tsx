@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { Router } from 'wouter';
 import { memoryLocation } from 'wouter/memory-location';
 
-import { RootDiContext, createRootDi } from '../di';
+import { RootDiContext, rootDikon } from '../di';
 import { createFeatureFlagClient } from '../shared/featureFlags';
 import { createMemoryRouterService } from '../test/createMemoryRouterService';
 import { createFakeHttpClient } from '../test/fakeHttpClient';
@@ -13,7 +13,7 @@ import { AppShell } from './AppShell';
 describe('AppShell', () => {
   test('keeps root services in the shell while route bundles load lazily', async () => {
     const location = memoryLocation();
-    const rootDi = createRootDi().build({
+    const rootDi = rootDikon.build({
       appConfig: {
         owner: 'temoncher',
         repo: 'dikon',

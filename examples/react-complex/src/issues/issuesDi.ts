@@ -1,6 +1,6 @@
 import { dikon } from '../../../../dikon.ts';
 import type { RootDi } from '../di';
-import { createFeatureFlagsPipe } from '../shared/featureFlags';
+import { createFeatureFlagsDikon } from '../shared/featureFlags';
 import type { IssueSummary, RepositoryConfig } from '../shared/githubTypes';
 import type { HttpClient } from '../shared/httpClient';
 
@@ -14,7 +14,7 @@ interface GithubIssueResponse {
   readonly pull_request?: unknown;
 }
 
-const withIssuesFlags = createFeatureFlagsPipe({
+const issuesFlagsDikon = createFeatureFlagsDikon({
   namespace: 'issues',
   flags: {
     showAuthor: true,
@@ -39,21 +39,19 @@ async function loadIssues(
     }));
 }
 
-export function createIssuesDi() {
-  return dikon()
-    .require<RootDi>()
-    .pipe(withIssuesFlags)
-    .provide({
-      routeMetadata() {
-        return {
-          emptyText: 'No open issues returned for this repository.',
-          title: 'Open issues',
-        };
-      },
-      loadIssues({ httpClient, repositoryConfig }) {
-        return () => loadIssues(httpClient, repositoryConfig);
-      },
-    });
-}
+export const issuesDikon = dikon()
+  .require<RootDi>()
+  .use(issuesFlagsDikon)
+  .provide({
+    routeMetadata() {
+      return {
+        emptyText: 'No open issues returned for this repository.',
+        title: 'Open issues',
+      };
+    },
+    loadIssues({ httpClient, repositoryConfig }) {
+      return () => loadIssues(httpClient, repositoryConfig);
+    },
+  });
 
-export type IssuesDi = dikon.Of<ReturnType<typeof createIssuesDi>>;
+export type IssuesDi = dikon.Of<typeof issuesDikon>;

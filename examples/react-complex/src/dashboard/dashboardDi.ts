@@ -28,19 +28,17 @@ function loadRepository(
     }));
 }
 
-export function createDashboardDi() {
-  return dikon()
-    .require<RootDi>()
-    .provide({
-      routeMetadata() {
-        return {
-          title: 'Repository overview',
-        };
-      },
-      loadRepository({ httpClient, repositoryConfig }) {
-        return () => loadRepository(httpClient, repositoryConfig);
-      },
-    });
-}
+export const dashboardDikon = dikon()
+  .require<RootDi>()
+  .provide({
+    routeMetadata() {
+      return {
+        title: 'Repository overview',
+      };
+    },
+    loadRepository({ httpClient, repositoryConfig }) {
+      return () => loadRepository(httpClient, repositoryConfig);
+    },
+  });
 
-export type DashboardDi = dikon.Of<ReturnType<typeof createDashboardDi>>;
+export type DashboardDi = dikon.Of<typeof dashboardDikon>;

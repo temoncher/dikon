@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { RootDiContext, createRootDi } from '../di';
+import { RootDiContext, rootDikon } from '../di';
 import { createFeatureFlagClient } from '../shared/featureFlags';
 import {
   createErrorHttpClient,
@@ -24,7 +24,7 @@ type Story = StoryObj<typeof meta>;
 export const Loading: Story = {
   render: () => (
     <RootDiContext
-      value={createRootDi().build({
+      value={rootDikon.build({
         appConfig: { owner: 'temoncher', repo: 'dikon' },
         featureFlagClient: createFeatureFlagClient(),
         httpClient: createLoadingHttpClient(),
@@ -41,7 +41,7 @@ export const Loading: Story = {
 export const Error: Story = {
   render: () => (
     <RootDiContext
-      value={createRootDi().build({
+      value={rootDikon.build({
         appConfig: { owner: 'temoncher', repo: 'dikon' },
         featureFlagClient: createFeatureFlagClient(),
         httpClient: createErrorHttpClient('Repository unavailable'),
@@ -58,7 +58,7 @@ export const Error: Story = {
 export const Success: Story = {
   render: () => (
     <RootDiContext
-      value={createRootDi().build({
+      value={rootDikon.build({
         appConfig: { owner: 'temoncher', repo: 'dikon' },
         featureFlagClient: createFeatureFlagClient(),
         httpClient: createFakeHttpClient(),

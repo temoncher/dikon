@@ -15,7 +15,7 @@ container from the root container.
 
 - React-owned services entering DI from the outside.
 - A root container shared by lazy route containers.
-- A reusable pipe function that turns declared feature flags into typed route services.
+- A reusable dikon that turns declared feature flags into typed route services.
 - Domain folders that keep components, services, stories, and screenshot tests together.
 - Tests and stories replacing the HTTP client through DI.
 
@@ -28,29 +28,31 @@ container from the root container.
 - the feature flag client,
 - static app configuration.
 
-Those values are passed flat into `createRootDi().build(...)`. Root DI then derives
+Those values are passed flat into `rootDikon.build(...)`. Root DI then derives
 `repositoryConfig`, a stable repository target that child route containers can reuse without
 knowing how the root was created.
 
 ## Route DI
 
-Each route folder has a `create*Di.ts` file. A route container:
+Each route folder has a `*Di.ts` file that composes and exports a dikon at module scope (for
+example `commitsDikon`). Building is pure — the route component calls
+`commitsDikon.build(undefined, rootDi)` and the shared dikon is never mutated. A route dikon:
 
 - requires `RootDi`,
 - uses plain providers for route metadata,
-- pipes a declared feature flag helper when the route needs typed flags,
+- `use`s a declared feature flag dikon when the route needs typed flags,
 - provides only its domain-specific GitHub request loader.
 
-This keeps route modules independent while still sharing shell services such as routing and the
+This keeps route folders independent while still sharing shell services such as routing and the
 repository config.
 
-## Reusable Pipe Function
+## Reusable Dikon
 
-`src/shared/featureFlags.ts` contains the reusable pipe factory. Each route declares the flags it
+`src/shared/featureFlags.ts` contains the reusable dikon factory. Each route declares the flags it
 consumes:
 
 ```ts
-const withCommitsFlags = createFeatureFlagsPipe({
+const commitsFlagsDikon = createFeatureFlagsDikon({
   namespace: 'commits',
   flags: {
     compactList: false,
@@ -59,11 +61,15 @@ const withCommitsFlags = createFeatureFlagsPipe({
 });
 ```
 
-The pipe function requires the root `featureFlagClient` and provides `featureFlags`, with typed boolean
+The dikon requires the root `featureFlagClient` and provides `featureFlags`, with typed boolean
 properties from the declaration.
 
-That is the shape where a reusable function helps: one configured feature needs root infrastructure
+That is the shape where a reusable dikon helps: one configured feature needs root infrastructure
 and provides route-local services. Simpler route metadata stays as plain `.provide(...)` calls.
+
+Override-based test doubles live next to the route in `src/commits/commitsDi.test.ts`: a test takes
+the real `commitsDikon`, `.override(...)`s the network-backed loader (or the resolved feature
+flags), and builds — the exported dikon stays untouched because dikons are immutable.
 
 ## Tests And Stories
 

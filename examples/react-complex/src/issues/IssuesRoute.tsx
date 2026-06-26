@@ -2,11 +2,11 @@ import { use, useMemo } from 'react';
 
 import { RootDiContext } from '../di';
 import { useAsyncValue } from '../shared/useAsyncValue';
-import { createIssuesDi } from './createIssuesDi';
+import { issuesDikon } from './issuesDi';
 
 export default function IssuesRoute() {
   const rootDi = use(RootDiContext);
-  const di = useMemo(() => createIssuesDi().build(undefined, rootDi), [rootDi]);
+  const di = useMemo(() => issuesDikon.build(undefined, rootDi), [rootDi]);
   const issues = useAsyncValue(di.loadIssues);
 
   return (

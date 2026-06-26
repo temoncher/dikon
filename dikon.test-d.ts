@@ -2,12 +2,7 @@ import { assertType, expectTypeOf, test } from 'vitest';
 
 import { dikon } from './dikon';
 
-test('dikon only creates builders', () => {
-  // @ts-expect-error reusable pipe functions are plain functions, not dikon values
-  dikon((builder) => builder);
-});
-
-test('types reusable pipe functions', () => {
+test('types reusable standalone dikons through use', () => {
   const parent = dikon()
     .provide({
       config() {
@@ -15,27 +10,28 @@ test('types reusable pipe functions', () => {
       },
     })
     .build();
-  const withFortyTwo = ((builder) =>
-    builder.require<{ config: number }>().provide({
+  const fortyTwoDikon = dikon()
+    .require<{ config: number }>()
+    .provide({
       fortyTwo(di) {
         return di.config + 32;
       },
-    })) satisfies dikon.PipeFn;
+    });
 
-  const child = dikon().require<typeof parent>().pipe(withFortyTwo).build(undefined, parent);
+  const child = dikon().require<typeof parent>().use(fortyTwoDikon).build(undefined, parent);
 
   assertType<number>(child.fortyTwo);
 });
 
 test('returns readonly build output', () => {
-  const builder = dikon().provide({
+  const appDikon = dikon().provide({
     value() {
       return 'ready';
     },
   });
 
-  type Dependencies = dikon.Of<typeof builder>;
-  const deps = builder.build();
+  type Dependencies = dikon.Of<typeof appDikon>;
+  const deps = appDikon.build();
 
   assertType<Readonly<{ value: string }>>(deps);
   assertType<Readonly<{ value: string }>>({} as Dependencies);
@@ -87,7 +83,7 @@ test('infers required and provided dependencies', () => {
     list: () => httpClient.get<readonly { id: number; title: string }[]>('/posts'),
   });
 
-  const builder = dikon()
+  const appDikon = dikon()
     .require<{ config: { readonly baseUrl: string } }>()
     .provide({
       httpClient: ({ config }) => createHttpClient(config.baseUrl),
@@ -96,7 +92,7 @@ test('infers required and provided dependencies', () => {
       postsApi: ({ httpClient }) => createPostsApi(httpClient),
     });
 
-  type Dependencies = dikon.Of<typeof builder>;
+  type Dependencies = dikon.Of<typeof appDikon>;
 
   expectTypeOf<Dependencies['config']>().toEqualTypeOf<{ readonly baseUrl: string }>();
   expectTypeOf<Dependencies['httpClient']>().toEqualTypeOf<{
@@ -107,9 +103,9 @@ test('infers required and provided dependencies', () => {
   }>();
 
   // @ts-expect-error config is required
-  builder.build();
+  appDikon.build();
 
-  const di = builder.build({ config: { baseUrl: 'https://api.example.com' } });
+  const di = appDikon.build({ config: { baseUrl: 'https://api.example.com' } });
 
   assertType<Promise<readonly { id: number; title: string }[]>>(di.postsApi.list());
 });
@@ -132,7 +128,7 @@ test('does not add requirements for values that were already provided', () => {
   assertType<string>(di.url);
 });
 
-test('types parent containers with builder methods', () => {
+test('types parent containers with dikon methods', () => {
   const parent = dikon()
     .provide({
       config() {
@@ -141,20 +137,20 @@ test('types parent containers with builder methods', () => {
     })
     .build();
 
-  const childBuilder = dikon()
+  const childDikon = dikon()
     .require<typeof parent>()
     .provide({
       url({ config }) {
         return `${config.baseUrl}/posts`;
       },
     });
-  const child = childBuilder.build(undefined, parent);
+  const child = childDikon.build(undefined, parent);
 
   assertType<string>(child.url);
   expectTypeOf(child.config).toEqualTypeOf<typeof parent.config>();
 
   // @ts-expect-error parent is required when type-only deps are not provided
-  childBuilder.build();
+  childDikon.build();
 });
 
 test('keeps local requirements in the first build argument', () => {
@@ -166,7 +162,7 @@ test('keeps local requirements in the first build argument', () => {
     })
     .build();
 
-  const childBuilder = dikon()
+  const childDikon = dikon()
     .require<typeof parent>()
     .require<{ seed: string }>()
     .provide({
@@ -175,14 +171,14 @@ test('keeps local requirements in the first build argument', () => {
       },
     });
 
-  childBuilder.build({ seed: 'posts' }, parent);
-  childBuilder.buildEager({ seed: 'posts' }, parent);
+  childDikon.build({ seed: 'posts' }, parent);
+  childDikon.buildEager({ seed: 'posts' }, parent);
 
   // @ts-expect-error seed is still required even when a parent is passed
-  childBuilder.build(undefined, parent);
+  childDikon.build(undefined, parent);
 });
 
-test('types parent containers with single-callback builder pipes', () => {
+test('types parent containers alongside used dikons', () => {
   const parent = dikon()
     .provide({
       config() {
@@ -191,16 +187,15 @@ test('types parent containers with single-callback builder pipes', () => {
     })
     .build();
 
-  const child = dikon()
-    .require<typeof parent>()
-    .pipe((builder) =>
-      builder.provide({
-        url({ config }) {
-          return `${config.baseUrl}/posts`;
-        },
-      }),
-    )
-    .build(undefined, parent);
+  const urlDikon = dikon()
+    .require<{ config: { baseUrl: string } }>()
+    .provide({
+      url({ config }) {
+        return `${config.baseUrl}/posts`;
+      },
+    });
+
+  const child = dikon().require<typeof parent>().use(urlDikon).build(undefined, parent);
 
   assertType<string>(child.url);
   expectTypeOf(child.config).toEqualTypeOf<typeof parent.config>();
@@ -212,7 +207,7 @@ test('provided values satisfy requirements', () => {
     readonly theme: { readonly name: string };
   }
 
-  const builder = dikon()
+  const appDikon = dikon()
     .require<RootDeps>()
     .require<{ appConfig: { readonly title: string } }>()
     .provide({
@@ -227,7 +222,7 @@ test('provided values satisfy requirements', () => {
       },
     });
 
-  const di = builder.build({ appConfig: { title: 'Board' } });
+  const di = appDikon.build({ appConfig: { title: 'Board' } });
 
   assertType<string>(di.title);
 });
@@ -238,7 +233,7 @@ test('overridden values satisfy requirements', () => {
     readonly theme: { readonly name: string };
   }
 
-  const builder = dikon()
+  const appDikon = dikon()
     .require<RootDeps>()
     .require<{ appConfig: { readonly title: string } }>()
     .override({
@@ -251,7 +246,7 @@ test('overridden values satisfy requirements', () => {
       },
     });
 
-  const di = builder.build({ appConfig: { title: 'Board' } });
+  const di = appDikon.build({ appConfig: { title: 'Board' } });
 
   assertType<string>(di.title);
 });
@@ -262,162 +257,99 @@ test('partially overridden values leave other requirements in place', () => {
     readonly theme: { readonly name: string };
   }
 
-  const builder = dikon()
+  const appDikon = dikon()
     .require<RootDeps>()
     .override({
       currentUser: () => ({ name: 'Test User' }),
     });
 
   // @ts-expect-error theme is still required when only currentUser is overridden
-  builder.build();
+  appDikon.build();
 
-  builder.build({ theme: { name: 'Test Theme' } });
+  appDikon.build({ theme: { name: 'Test Theme' } });
 });
 
-test('types reusable pipe functions used through builder pipe', () => {
-  const withHttpClient = ((builder) =>
-    builder.require<{ config: { readonly baseUrl: string } }>().provide({
-      url({ config }) {
-        return `${config.baseUrl}/posts`;
-      },
-    })) satisfies dikon.PipeFn;
-
-  const builder = dikon().pipe(withHttpClient);
-
-  // @ts-expect-error config is required by the pipe function
-  builder.build();
-
-  const di = builder.build({ config: { baseUrl: 'https://api.test' } });
-
-  assertType<string>(di.url);
-});
-
-test('types reusable pipe functions written with explicit generics', () => {
-  function withHttpClient<TExistingDeps, TRequires>(
-    builder: dikon.Dikon<TExistingDeps, TRequires>,
-  ) {
-    return builder.require<{ config: { readonly baseUrl: string } }>().provide({
+test('bubbles up requirements from a used dikon', () => {
+  const httpClientDikon = dikon()
+    .require<{ config: { readonly baseUrl: string } }>()
+    .provide({
       url({ config }) {
         return `${config.baseUrl}/posts`;
       },
     });
-  }
 
-  const builder = dikon().pipe(withHttpClient);
+  const appDikon = dikon().use(httpClientDikon);
 
-  // @ts-expect-error config is required by the pipe function
-  builder.build();
+  // @ts-expect-error config is required by the used dikon
+  appDikon.build();
 
-  const di = builder.build({ config: { baseUrl: 'https://api.test' } });
+  const di = appDikon.build({ config: { baseUrl: 'https://api.test' } });
 
   assertType<string>(di.url);
 });
 
-test('pipe accepts a single callback', () => {
-  const builder = dikon().pipe((current) =>
-    current.provide({
-      value() {
-        return 'ready';
-      },
-    }),
-  );
-
-  assertType<string>(builder.build().value);
-
-  dikon().pipe(
-    (current) => current,
-    // @ts-expect-error pipe composes one callback, not a list of transforms
-    (current: unknown) => current,
-  );
-});
-
-test('dikon builders keep their type through pipe callbacks', () => {
-  const builder = dikon().provide({
-    value() {
-      return 'ready';
-    },
-  });
-
-  const dataBuilder: dikon.Dikon<{ value: string }, {}> = builder;
-  const di = dataBuilder.pipe((current) => current.build());
-
-  assertType<string>(di.value);
-});
-
-test('types pipe callbacks from the current builder', () => {
+test('types service instances contributed by a used dikon', () => {
   const createHttpClient = (baseUrl: string) => ({
     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
   });
 
-  const builder = dikon()
+  const httpClientDikon = dikon()
     .require<{ config: { readonly baseUrl: string } }>()
-    .pipe((current) =>
-      current.provide({
-        httpClient: ({ config }) => createHttpClient(config.baseUrl),
-      }),
-    );
+    .provide({
+      httpClient: ({ config }) => createHttpClient(config.baseUrl),
+    });
 
-  const di = builder.build({ config: { baseUrl: 'https://api.example.com' } });
+  const appDikon = dikon().require<{ config: { readonly baseUrl: string } }>().use(httpClientDikon);
+
+  const di = appDikon.build({ config: { baseUrl: 'https://api.example.com' } });
 
   assertType<Promise<readonly { id: number; title: string }[]>>(
     di.httpClient.get<readonly { id: number; title: string }[]>('/posts'),
   );
 });
 
-test('allows pipe callbacks to return arbitrary values', () => {
-  const value = dikon()
-    .provide({
-      service() {
-        return 'ready';
-      },
-    })
-    .pipe((current) => current.build().service);
-
-  assertType<string>(value);
-});
-
-test('keeps requirements added by a piped builder', () => {
-  interface Config {
-    readonly baseUrl: string;
-  }
-
-  const builder = dikon()
-    .pipe((current) => current.require<{ config: Config }>())
+test('satisfies requirements from earlier dikons without bubbling them up', () => {
+  const configDikon = dikon().provide({
+    config() {
+      return { baseUrl: 'https://api.test' };
+    },
+  });
+  const urlDikon = dikon()
+    .require<{ config: { readonly baseUrl: string } }>()
     .provide({
       url({ config }) {
         return `${config.baseUrl}/posts`;
       },
     });
 
-  // @ts-expect-error config is required through the piped builder
-  builder.build();
-
-  const di = builder.build({ config: { baseUrl: 'https://api.test' } });
+  const di = dikon().use(configDikon).use(urlDikon).build();
 
   assertType<string>(di.url);
 });
 
-test('does not add requirements for values that were already provided before pipe', () => {
-  const builder = dikon()
+test('lets a used dikon satisfy a previously required service', () => {
+  const clockDikon = dikon().provide({
+    clock() {
+      return { now: () => 0 };
+    },
+  });
+
+  const appDikon = dikon()
+    .require<{ clock: { now(): number } }>()
     .provide({
-      config() {
-        return { baseUrl: 'https://api.test' };
+      time({ clock }) {
+        return clock.now();
       },
     })
-    .pipe((current) => current.require<{ config: { readonly baseUrl: string } }>())
-    .provide({
-      url({ config }) {
-        return `${config.baseUrl}/posts`;
-      },
-    });
+    .use(clockDikon);
 
-  const di = builder.build();
+  const di = appDikon.build();
 
-  assertType<string>(di.url);
+  assertType<number>(di.time);
 });
 
 test('restricts overrides to existing services with the existing service type', () => {
-  const builder = dikon().provide({
+  const appDikon = dikon().provide({
     count() {
       return 1;
     },
@@ -426,15 +358,15 @@ test('restricts overrides to existing services with the existing service type', 
     },
   });
 
-  builder.override({
+  appDikon.override({
     count: () => 2,
     label: ({ count }) => `count:${count}`,
   });
 
   // @ts-expect-error missing was never provided
-  builder.override({ missing: () => true });
+  appDikon.override({ missing: () => true });
 
-  builder.override({
+  appDikon.override({
     // @ts-expect-error count must remain a number
     count: () => 'two',
   });

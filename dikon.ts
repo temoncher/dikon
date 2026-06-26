@@ -1,5 +1,5 @@
 /**
- * Creates a DI builder when called without arguments.
+ * Creates a dikon when called without arguments.
  *
  * ```ts
  * const createHttpClient = (baseUrl: string) => ({
@@ -16,7 +16,7 @@
  */
 export function dikon(): dikon.Dikon<{}, {}>;
 export function dikon(): dikon.Dikon<{}, {}> {
-  return createBuilder();
+  return createDikon([]);
 }
 
 /**
@@ -39,11 +39,8 @@ export function dikon(): dikon.Dikon<{}, {}> {
  */
 export namespace dikon {
   export type Of<T extends Dikon<any, any>> = Built<T[typeof __dikonTypes]['existingDeps']>;
-  export type PipeFn = <TExistingDeps, TRequires>(
-    builder: Dikon<TExistingDeps, TRequires>,
-  ) => unknown;
 
-  // Explicit invariance avoids TypeScript recalculating variance for the fluent builder type.
+  // Explicit invariance avoids TypeScript recalculating variance for the fluent dikon type.
   export interface Dikon<in out TExistingDeps, in out TRequires> {
     [__dikonTypes]: {
       existingDeps: TExistingDeps;
@@ -192,28 +189,41 @@ export namespace dikon {
     ): Built<TExistingDeps>;
     buildEager(...args: StandaloneBuildArgs<TRequires>): Built<TExistingDeps>;
     /**
-     * Passes the current builder to a function and returns that function's
-     * result. Use this to keep custom builder helpers inside the fluent chain.
+     * Merges another standalone dikon into this one. That dikon is authored
+     * as its own `dikon()` chain with concrete types, so its services and
+     * requirements are type-checked once, in isolation, instead of being
+     * re-instantiated against this dikon's generic type parameters.
+     *
+     * Its services become available here and satisfy any matching
+     * requirements. Requirements it declares that this dikon does not
+     * already supply bubble up and must be provided at build time. Collisions
+     * resolve last-wins, matching later `provide`/`override` layers.
      *
      * ```ts
      * const createHttpClient = (baseUrl: string) => ({
      *     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
      * });
      *
-     * const withHttpClient = ((builder) =>
-     *     builder
-     *         .require<{ config: { readonly baseUrl: string } }>()
-     *         .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) })
-     * ) satisfies dikon.PipeFn;
+     * const httpClientDikon = dikon()
+     *     .require<{ config: { readonly baseUrl: string } }>()
+     *     .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) });
      *
      * const di = dikon()
-     *     .pipe(withHttpClient)
+     *     .use(httpClientDikon)
      *     .build({ config: { baseUrl: 'https://api.example.com' } });
      *
      * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
      * ```
      */
-    pipe<TResult>(fn: (builder: Dikon<TExistingDeps, TRequires>) => TResult): TResult;
+    use<TOther extends Dikon<any, any>>(
+      other: TOther,
+    ): Dikon<
+      Merge<TExistingDeps, DikonExistingDeps<TOther>>,
+      Merge<
+        SimplifyOmit<TRequires, DikonProvidedKeys<TOther>>,
+        SimplifyOmit<DikonRequires<TOther>, keyof TExistingDeps>
+      >
+    >;
   }
 }
 
@@ -234,6 +244,15 @@ type Built<T> = Readonly<T>;
 
 type FactoryMap = Record<PropertyKey, (di: unknown) => unknown>;
 type AnyDikon = dikon.Dikon<any, any>;
+
+type DikonExistingDeps<T extends AnyDikon> = T[typeof __dikonTypes]['existingDeps'];
+type DikonRequires<T extends AnyDikon> = T[typeof __dikonTypes]['requires'];
+// Keys a module supplies on its own: everything in its deps that it does not also require.
+// Operating on key unions (Exclude) avoids materializing an object type just to read its keys.
+type DikonProvidedKeys<T extends AnyDikon> = Exclude<
+  keyof DikonExistingDeps<T>,
+  keyof DikonRequires<T>
+>;
 
 type HasNoKeys<T> = keyof T extends never ? true : false;
 type StandaloneBuildArgs<TRequires> =
@@ -267,19 +286,18 @@ const __instances = Symbol('__instances');
 
 const dikonMethods = {
   require(this: AnyDikon) {
+    // Purely a type-level declaration; it adds no layer, so sharing the dikon is safe.
     return this;
   },
   provide(this: AnyDikon, layerObj: FactoryMap) {
-    this.__layers.push({ deps: layerObj, kind: 'provide' });
     reportNonFunctionFactories(layerObj);
 
-    return this;
+    return createDikon([...this.__layers, { deps: layerObj, kind: 'provide' }]);
   },
   override(this: AnyDikon, overrideObj: FactoryMap) {
-    this.__layers.push({ deps: overrideObj, kind: 'override' });
     reportNonFunctionFactories(overrideObj);
 
-    return this;
+    return createDikon([...this.__layers, { deps: overrideObj, kind: 'override' }]);
   },
   build(this: AnyDikon, buildRequires?: object, parent?: object) {
     return buildContainer(this, buildRequires, parent);
@@ -287,22 +305,25 @@ const dikonMethods = {
   buildEager(this: AnyDikon, buildRequires?: object, parent?: object) {
     return buildEagerContainer(this, buildRequires, parent);
   },
-  pipe(this: AnyDikon, fn: (builder: unknown) => unknown) {
-    return fn(this);
+  use(this: AnyDikon, other: AnyDikon) {
+    return createDikon([...this.__layers, ...other.__layers]);
   },
 };
 
-function createBuilder(): dikon.Dikon<{}, {}> {
-  const builder = {
-    __layers: [] as Layer[],
+// Dikons are immutable: provide/override/use return a fresh dikon over a new layers array
+// rather than mutating in place. A dikon composed once at module scope can be shared and
+// built repeatedly without one branch's overrides leaking into another.
+function createDikon(layers: Layer[]): dikon.Dikon<{}, {}> {
+  const instance = {
+    __layers: layers,
   };
-  Object.setPrototypeOf(builder, dikonMethods);
+  Object.setPrototypeOf(instance, dikonMethods);
 
-  return builder as unknown as dikon.Dikon<{}, {}>;
+  return instance as unknown as dikon.Dikon<{}, {}>;
 }
 
 function buildContainer<TExistingDeps, TRequires>(
-  builder: dikon.Dikon<TExistingDeps, TRequires>,
+  instance: dikon.Dikon<TExistingDeps, TRequires>,
   buildRequires: object | undefined,
   parent: object | undefined,
 ): TExistingDeps {
@@ -314,7 +335,7 @@ function buildContainer<TExistingDeps, TRequires>(
     writable: false,
   });
 
-  for (const layer of builder.__layers) {
+  for (const layer of instance.__layers) {
     for (const serviceName of getOwnEnumerableKeys(layer.deps)) {
       Object.defineProperty(di, serviceName, {
         get() {
@@ -333,13 +354,13 @@ function buildContainer<TExistingDeps, TRequires>(
 }
 
 function buildEagerContainer<TExistingDeps, TRequires>(
-  builder: dikon.Dikon<TExistingDeps, TRequires>,
+  instance: dikon.Dikon<TExistingDeps, TRequires>,
   buildRequires: object | undefined,
   parent: object | undefined,
 ): TExistingDeps {
   const di = createContainer(buildRequires, parent);
 
-  for (const layer of createEagerLayers(builder.__layers)) {
+  for (const layer of createEagerLayers(instance.__layers)) {
     const serviceNames = getOwnEnumerableKeys(layer);
     const layerInstances = {} as Record<PropertyKey, unknown>;
 

@@ -2,11 +2,11 @@ import { use, useMemo } from 'react';
 
 import { RootDiContext } from '../di';
 import { useAsyncValue } from '../shared/useAsyncValue';
-import { createDashboardDi } from './createDashboardDi';
+import { dashboardDikon } from './dashboardDi';
 
 export default function DashboardRoute() {
   const rootDi = use(RootDiContext);
-  const di = useMemo(() => createDashboardDi().build(undefined, rootDi), [rootDi]);
+  const di = useMemo(() => dashboardDikon.build(undefined, rootDi), [rootDi]);
   const summary = useAsyncValue(di.loadRepository);
 
   return (

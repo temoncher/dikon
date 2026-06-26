@@ -7,35 +7,172 @@ describe('dikon', () => {
     vi.restoreAllMocks();
   });
 
-  test('creates independent builders by calling dikon directly', () => {
-    const firstBuilder = dikon().provide({
+  test('creates independent dikons by calling dikon directly', () => {
+    const firstDikon = dikon().provide({
       value() {
         return 'first';
       },
     });
-    const secondBuilder = dikon().provide({
+    const secondDikon = dikon().provide({
       value() {
         return 'second';
       },
     });
 
-    expect(firstBuilder.build().value).toBe('first');
-    expect(secondBuilder.build().value).toBe('second');
+    expect(firstDikon.build().value).toBe('first');
+    expect(secondDikon.build().value).toBe('second');
   });
 
-  test('passes reusable pipe functions through the builder chain', () => {
-    const withHttpClient = ((builder) =>
-      builder.require<{ config: { readonly baseUrl: string } }>().provide({
+  test('merges a standalone dikon through use', () => {
+    const urlDikon = dikon()
+      .require<{ config: { readonly baseUrl: string } }>()
+      .provide({
         url({ config }) {
           return `${config.baseUrl}/posts`;
         },
-      })) satisfies dikon.PipeFn;
+      });
 
     const dataDi = dikon()
-      .pipe(withHttpClient)
+      .use(urlDikon)
       .build({ config: { baseUrl: 'https://api.test' } });
 
     expect(dataDi.url).toBe('https://api.test/posts');
+  });
+
+  test('satisfies a requirement from an earlier dikon', () => {
+    const baseDikon = dikon().provide({
+      base() {
+        return 'base';
+      },
+    });
+    const labelDikon = dikon()
+      .require<{ base: string }>()
+      .provide({
+        label({ base }) {
+          return `${base}-label`;
+        },
+      });
+
+    const di = dikon().use(baseDikon).use(labelDikon).build();
+
+    expect(di.base).toBe('base');
+    expect(di.label).toBe('base-label');
+  });
+
+  test('lets a used dikon satisfy a previously required service', () => {
+    const clockDikon = dikon().provide({
+      clock() {
+        return { now: () => 0 };
+      },
+    });
+
+    const di = dikon()
+      .require<{ clock: { now(): number } }>()
+      .provide({
+        time({ clock }) {
+          return clock.now();
+        },
+      })
+      .use(clockDikon)
+      .build();
+
+    expect(di.time).toBe(0);
+  });
+
+  test('snapshots layers so use does not share later mutations', () => {
+    const baseDikon = dikon().provide({
+      base() {
+        return 'base';
+      },
+    });
+    const consumer = dikon()
+      .use(baseDikon)
+      .provide({
+        extra() {
+          return 'extra';
+        },
+      });
+
+    // Extending the consumer must not leak services back into the source dikon.
+    expect(Object.keys(baseDikon.build())).toEqual(['base']);
+
+    const consumerDi = consumer.build();
+
+    expect(consumerDi.base).toBe('base');
+    expect(consumerDi.extra).toBe('extra');
+  });
+
+  test('composes layers for eager builds', () => {
+    const baseDikon = dikon().provide({
+      base() {
+        return 'base';
+      },
+    });
+
+    const di = dikon()
+      .use(baseDikon)
+      .provide({
+        label({ base }) {
+          return `${base}-label`;
+        },
+      })
+      .buildEager();
+
+    expect(di).toMatchObject({ base: 'base', label: 'base-label' });
+  });
+
+  test('provide returns a new dikon and leaves the source unchanged', () => {
+    const base = dikon().provide({
+      shared() {
+        return 'shared';
+      },
+    });
+    const withFirst = base.provide({
+      first() {
+        return 'first';
+      },
+    });
+    const withSecond = base.provide({
+      second() {
+        return 'second';
+      },
+    });
+
+    expect(Object.keys(base.build())).toEqual(['shared']);
+    expect(Object.keys(withFirst.build())).toEqual(['shared', 'first']);
+    expect(Object.keys(withSecond.build())).toEqual(['shared', 'second']);
+  });
+
+  test('override branches independently from a shared dikon', () => {
+    const base = dikon().provide({
+      value() {
+        return 'base';
+      },
+    });
+    const overridden = base.override({
+      value: () => 'overridden',
+    });
+
+    // The shared dikon must not be polluted by overrides applied to a branch.
+    expect(base.build().value).toBe('base');
+    expect(overridden.build().value).toBe('overridden');
+  });
+
+  test('use branches independently from a shared dikon', () => {
+    const base = dikon().provide({
+      shared() {
+        return 'shared';
+      },
+    });
+    const extra = dikon().provide({
+      added() {
+        return 'added';
+      },
+    });
+    const composed = base.use(extra);
+
+    expect(Object.keys(base.build())).toEqual(['shared']);
+    expect(Object.keys(composed.build())).toEqual(['shared', 'added']);
   });
 
   test('defines lazy services as enumerable readonly own properties', () => {
@@ -144,44 +281,6 @@ describe('dikon', () => {
     return expect(di.postsApi.list())
       .resolves.toEqual([{ id: 1, title: 'Hello' }])
       .then(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/posts'));
-  });
-
-  test('pipes the current builder into a function', () => {
-    const fetchMock = vi.fn<(path: string) => Promise<{ json: () => Promise<unknown> }>>(() =>
-      Promise.resolve({
-        json: () => Promise.resolve([{ id: 1, title: 'Hello' }]),
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const createHttpClient = (baseUrl: string) => ({
-      get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
-    });
-
-    const di = dikon()
-      .require<{ config: { readonly baseUrl: string } }>()
-      .pipe((builder) =>
-        builder.provide({
-          httpClient: ({ config }) => createHttpClient(config.baseUrl),
-        }),
-      )
-      .build({ config: { baseUrl: 'https://api.example.com' } });
-
-    return expect(di.httpClient.get<readonly { id: number; title: string }[]>('/posts'))
-      .resolves.toEqual([{ id: 1, title: 'Hello' }])
-      .then(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/posts'));
-  });
-
-  test('returns arbitrary pipe results', () => {
-    const service = dikon()
-      .provide({
-        value() {
-          return 'ready';
-        },
-      })
-      .pipe((builder) => builder.build().value);
-
-    expect(service).toBe('ready');
   });
 
   test('creates provided services lazily and reuses the same instance', () => {
@@ -450,7 +549,7 @@ describe('dikon', () => {
     expect(child.url).toBe('https://parent.test/posts');
   });
 
-  test('builds containers with a parent from builder pipes', () => {
+  test('builds containers with a parent from used dikons', () => {
     const parent = dikon()
       .provide({
         config() {
@@ -459,20 +558,19 @@ describe('dikon', () => {
       })
       .build();
 
-    const child = dikon()
-      .require<typeof parent>()
-      .pipe((builder) =>
-        builder.provide({
-          httpClient({ config }) {
-            return {
-              get(path: string) {
-                return `${config.baseUrl}${path}`;
-              },
-            };
-          },
-        }),
-      )
-      .build(undefined, parent);
+    const httpClientDikon = dikon()
+      .require<{ config: { readonly baseUrl: string } }>()
+      .provide({
+        httpClient({ config }) {
+          return {
+            get(path: string) {
+              return `${config.baseUrl}${path}`;
+            },
+          };
+        },
+      });
+
+    const child = dikon().require<typeof parent>().use(httpClientDikon).build(undefined, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(child.httpClient.get('/posts')).toBe('https://parent.test/posts');

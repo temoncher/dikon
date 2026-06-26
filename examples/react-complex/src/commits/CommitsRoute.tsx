@@ -2,11 +2,11 @@ import { use, useMemo } from 'react';
 
 import { RootDiContext } from '../di';
 import { useAsyncValue } from '../shared/useAsyncValue';
-import { createCommitsDi } from './createCommitsDi';
+import { commitsDikon } from './commitsDi';
 
 export default function CommitsRoute() {
   const rootDi = use(RootDiContext);
-  const di = useMemo(() => createCommitsDi().build(undefined, rootDi), [rootDi]);
+  const di = useMemo(() => commitsDikon.build(undefined, rootDi), [rootDi]);
   const commits = useAsyncValue(di.loadCommits);
 
   return (

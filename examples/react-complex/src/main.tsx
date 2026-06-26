@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { AppShell } from './app/AppShell';
-import { RootDiContext, createRootDi } from './di';
+import { RootDiContext, rootDikon } from './di';
 import { createFeatureFlagClient } from './shared/featureFlags';
 import { createHttpClient } from './shared/httpClient';
 import { useWouterRouterService } from './shell/wouterRouterService';
@@ -17,7 +17,7 @@ function RootDiProvider({ children }: { children: ReactNode }) {
   // React owns the browser router and HTTP client lifetimes, then hands them to root DI.
   const rootDi = useMemo(
     () =>
-      createRootDi().build({
+      rootDikon.build({
         appConfig: {
           owner: 'temoncher',
           repo: 'dikon',

@@ -1,6 +1,6 @@
 import { dikon } from '../../../../dikon.ts';
 import type { RootDi } from '../di';
-import { createFeatureFlagsPipe } from '../shared/featureFlags';
+import { createFeatureFlagsDikon } from '../shared/featureFlags';
 import type { CommitSummary, RepositoryConfig } from '../shared/githubTypes';
 import type { HttpClient } from '../shared/httpClient';
 
@@ -15,7 +15,7 @@ interface GithubCommitResponse {
   };
 }
 
-const withCommitsFlags = createFeatureFlagsPipe({
+const commitsFlagsDikon = createFeatureFlagsDikon({
   namespace: 'commits',
   flags: {
     compactList: false,
@@ -39,22 +39,19 @@ async function loadCommits(
   }));
 }
 
-export function createCommitsDi() {
-  return dikon()
-    .require<RootDi>()
-    .pipe(withCommitsFlags)
-    .provide({
-      routeMetadata() {
-        return {
-          emptyText: 'No commits returned for this repository.',
-          title: 'Recent commits',
-        };
-      },
-      loadCommits({ httpClient, repositoryConfig }) {
-        return () => loadCommits(httpClient, repositoryConfig);
-      },
-    });
-}
+export const commitsDikon = dikon()
+  .require<RootDi>()
+  .use(commitsFlagsDikon)
+  .provide({
+    routeMetadata() {
+      return {
+        emptyText: 'No commits returned for this repository.',
+        title: 'Recent commits',
+      };
+    },
+    loadCommits({ httpClient, repositoryConfig }) {
+      return () => loadCommits(httpClient, repositoryConfig);
+    },
+  });
 
-type CommitsDiBuilder = ReturnType<typeof createCommitsDi>;
-export type CommitsDi = dikon.Of<CommitsDiBuilder>;
+export type CommitsDi = dikon.Of<typeof commitsDikon>;
