@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 
 import { dikon } from '../../../../dikon.ts';
-import { createFeatureFlagClient, createFeatureFlagsPlugin } from './featureFlags';
+import { createFeatureFlagClient, createFeatureFlagsPipe } from './featureFlags';
 
-describe('createFeatureFlagsPlugin', () => {
+describe('createFeatureFlagsPipe', () => {
   test('provides typed feature flags from namespaced root flag values and defaults', () => {
-    const withFlags = createFeatureFlagsPlugin({
+    const withFlags = createFeatureFlagsPipe({
       namespace: 'commits',
       flags: {
         compactList: false,

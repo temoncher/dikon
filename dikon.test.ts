@@ -23,14 +23,13 @@ describe('dikon', () => {
     expect(secondBuilder.build().value).toBe('second');
   });
 
-  test('defines reusable transforms by calling dikon with a callback', () => {
-    const withHttpClient = dikon((builder) =>
+  test('passes reusable pipe functions through the builder chain', () => {
+    const withHttpClient = ((builder) =>
       builder.require<{ config: { readonly baseUrl: string } }>().provide({
         url({ config }) {
           return `${config.baseUrl}/posts`;
         },
-      }),
-    );
+      })) satisfies dikon.PipeFn;
 
     const dataDi = dikon()
       .pipe(withHttpClient)

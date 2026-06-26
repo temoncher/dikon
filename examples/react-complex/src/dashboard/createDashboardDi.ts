@@ -43,5 +43,4 @@ export function createDashboardDi() {
     });
 }
 
-type DashboardDiBuilder = ReturnType<typeof createDashboardDi>;
-export type DashboardDi = dikon.Of<DashboardDiBuilder>;
+export type DashboardDi = dikon.Of<ReturnType<typeof createDashboardDi>>;

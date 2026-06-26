@@ -14,36 +14,10 @@
  * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
  * ```
  */
-export function dikon(): Dikon<{}, {}>;
-/**
- * Defines a reusable Dikon plugin when called with a callback. Pass the
- * returned function to builder `.pipe(...)`.
- *
- * ```ts
- * const createHttpClient = (baseUrl: string) => ({
- *     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
- * });
- *
- * const withHttpClient = dikon((builder) =>
- *     builder
- *         .require<{ config: { readonly baseUrl: string } }>()
- *         .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) }),
- * );
- *
- * const di = dikon()
- *     .pipe(withHttpClient)
- *     .build({ config: { baseUrl: 'https://api.example.com' } });
- *
- * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
- * ```
- */
-export function dikon<TPlugin extends DikonPlugin>(fn: TPlugin): TPlugin;
-export function dikon(fn?: DikonPlugin): Dikon<{}, {}> | DikonPlugin {
-  return fn ?? createBuilder();
+export function dikon(): dikon.Dikon<{}, {}>;
+export function dikon(): dikon.Dikon<{}, {}> {
+  return createBuilder();
 }
-
-export type Dikon<TExistingDeps, TRequires> = dikon.Dikon<TExistingDeps, TRequires>;
-export type Of<T extends Dikon<any, any>> = dikon.Of<T>;
 
 /**
  * The single runtime export for Dikon.
@@ -65,6 +39,9 @@ export type Of<T extends Dikon<any, any>> = dikon.Of<T>;
  */
 export namespace dikon {
   export type Of<T extends Dikon<any, any>> = Built<T[typeof __dikonTypes]['existingDeps']>;
+  export type PipeFn = <TExistingDeps, TRequires>(
+    builder: Dikon<TExistingDeps, TRequires>,
+  ) => unknown;
 
   // Explicit invariance avoids TypeScript recalculating variance for the fluent builder type.
   export interface Dikon<in out TExistingDeps, in out TRequires> {
@@ -216,19 +193,18 @@ export namespace dikon {
     buildEager(...args: StandaloneBuildArgs<TRequires>): Built<TExistingDeps>;
     /**
      * Passes the current builder to a function and returns that function's
-     * result. Use this to compose reusable builder plugins.
+     * result. Use this to keep custom builder helpers inside the fluent chain.
      *
      * ```ts
      * const createHttpClient = (baseUrl: string) => ({
      *     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
      * });
      *
-     * const withHttpClient = <TExistingDeps, TRequires>(
-     *     builder: Dikon<TExistingDeps, TRequires>,
-     * ) =>
+     * const withHttpClient = ((builder) =>
      *     builder
      *         .require<{ config: { readonly baseUrl: string } }>()
-     *         .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) });
+     *         .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) })
+     * ) satisfies dikon.PipeFn;
      *
      * const di = dikon()
      *     .pipe(withHttpClient)
@@ -257,8 +233,7 @@ type ToInstances<T> = Simplify<{
 type Built<T> = Readonly<T>;
 
 type FactoryMap = Record<PropertyKey, (di: unknown) => unknown>;
-type DikonPlugin = <TExistingDeps, TRequires>(builder: Dikon<TExistingDeps, TRequires>) => unknown;
-type AnyDikon = Dikon<any, any>;
+type AnyDikon = dikon.Dikon<any, any>;
 
 type HasNoKeys<T> = keyof T extends never ? true : false;
 type StandaloneBuildArgs<TRequires> =
@@ -317,17 +292,17 @@ const dikonMethods = {
   },
 };
 
-function createBuilder(): Dikon<{}, {}> {
+function createBuilder(): dikon.Dikon<{}, {}> {
   const builder = {
     __layers: [] as Layer[],
   };
   Object.setPrototypeOf(builder, dikonMethods);
 
-  return builder as unknown as Dikon<{}, {}>;
+  return builder as unknown as dikon.Dikon<{}, {}>;
 }
 
 function buildContainer<TExistingDeps, TRequires>(
-  builder: Dikon<TExistingDeps, TRequires>,
+  builder: dikon.Dikon<TExistingDeps, TRequires>,
   buildRequires: object | undefined,
   parent: object | undefined,
 ): TExistingDeps {
@@ -358,7 +333,7 @@ function buildContainer<TExistingDeps, TRequires>(
 }
 
 function buildEagerContainer<TExistingDeps, TRequires>(
-  builder: Dikon<TExistingDeps, TRequires>,
+  builder: dikon.Dikon<TExistingDeps, TRequires>,
   buildRequires: object | undefined,
   parent: object | undefined,
 ): TExistingDeps {

@@ -2,9 +2,9 @@
 
 This example is the smallest useful React shape for Dikon.
 
-It intentionally avoids React context, route containers, plugins, and lazy loading. The app creates
-one root container in `main()`, then passes the built container to `App` as a prop. That keeps the
-dependency flow visible and makes this example a good starting point before looking at
+It intentionally avoids React context, route containers, reusable pipe helpers, and lazy loading.
+The app creates one root container in `main()`, then passes the built container to `App` as a prop.
+That keeps the dependency flow visible and makes this example a good starting point before looking at
 `react-complex`.
 
 ## What It Shows

@@ -1,4 +1,4 @@
-import { dikon } from '../../../../dikon.ts';
+import type { dikon } from '../../../../dikon.ts';
 
 export interface FeatureFlagClient {
   isEnabled(key: string): boolean | undefined;
@@ -9,7 +9,7 @@ type DeclaredFlags<T extends FlagDefaults> = {
   readonly [Key in keyof T]: boolean;
 };
 
-interface FeatureFlagsPluginConfig<T extends FlagDefaults> {
+interface FeatureFlagsPipeConfig<T extends FlagDefaults> {
   readonly namespace: string;
   readonly flags: T;
 }
@@ -21,12 +21,12 @@ export function createFeatureFlagClient(overrides: Readonly<Record<string, boole
 }
 
 /**
- * Routes use this plugin when they want typed, declared feature flags backed by root infra.
+ * Routes use this pipe function when they want typed feature flags backed by root infra.
  */
-export function createFeatureFlagsPlugin<const T extends FlagDefaults>(
-  config: FeatureFlagsPluginConfig<T>,
+export function createFeatureFlagsPipe<const T extends FlagDefaults>(
+  config: FeatureFlagsPipeConfig<T>,
 ) {
-  return dikon((builder) =>
+  return ((builder) =>
     builder.require<{ featureFlagClient: FeatureFlagClient }>().provide({
       featureFlags({ featureFlagClient }): DeclaredFlags<T> {
         return Object.fromEntries(
@@ -36,6 +36,5 @@ export function createFeatureFlagsPlugin<const T extends FlagDefaults>(
           ]),
         ) as DeclaredFlags<T>;
       },
-    }),
-  );
+    })) satisfies dikon.PipeFn;
 }

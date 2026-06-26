@@ -2,7 +2,12 @@ import { assertType, expectTypeOf, test } from 'vitest';
 
 import { dikon } from './dikon';
 
-test('types callable dikon builders and plugins', () => {
+test('dikon only creates builders', () => {
+  // @ts-expect-error reusable pipe functions are plain functions, not dikon values
+  dikon((builder) => builder);
+});
+
+test('types reusable pipe functions', () => {
   const parent = dikon()
     .provide({
       config() {
@@ -10,15 +15,14 @@ test('types callable dikon builders and plugins', () => {
       },
     })
     .build();
-  const plugin = dikon((builder) =>
+  const withFortyTwo = ((builder) =>
     builder.require<{ config: number }>().provide({
       fortyTwo(di) {
         return di.config + 32;
       },
-    }),
-  );
+    })) satisfies dikon.PipeFn;
 
-  const child = dikon().require<typeof parent>().pipe(plugin).build(undefined, parent);
+  const child = dikon().require<typeof parent>().pipe(withFortyTwo).build(undefined, parent);
 
   assertType<number>(child.fortyTwo);
 });
@@ -270,18 +274,38 @@ test('partially overridden values leave other requirements in place', () => {
   builder.build({ theme: { name: 'Test Theme' } });
 });
 
-test('types reusable dikon plugins used through builder pipe', () => {
-  const withHttpClient = dikon((builder) =>
+test('types reusable pipe functions used through builder pipe', () => {
+  const withHttpClient = ((builder) =>
     builder.require<{ config: { readonly baseUrl: string } }>().provide({
       url({ config }) {
         return `${config.baseUrl}/posts`;
       },
-    }),
-  );
+    })) satisfies dikon.PipeFn;
 
   const builder = dikon().pipe(withHttpClient);
 
-  // @ts-expect-error config is required by the plugin
+  // @ts-expect-error config is required by the pipe function
+  builder.build();
+
+  const di = builder.build({ config: { baseUrl: 'https://api.test' } });
+
+  assertType<string>(di.url);
+});
+
+test('types reusable pipe functions written with explicit generics', () => {
+  function withHttpClient<TExistingDeps, TRequires>(
+    builder: dikon.Dikon<TExistingDeps, TRequires>,
+  ) {
+    return builder.require<{ config: { readonly baseUrl: string } }>().provide({
+      url({ config }) {
+        return `${config.baseUrl}/posts`;
+      },
+    });
+  }
+
+  const builder = dikon().pipe(withHttpClient);
+
+  // @ts-expect-error config is required by the pipe function
   builder.build();
 
   const di = builder.build({ config: { baseUrl: 'https://api.test' } });

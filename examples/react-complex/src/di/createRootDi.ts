@@ -31,5 +31,4 @@ export function createRootDi() {
   });
 }
 
-type RootDiBuilder = ReturnType<typeof createRootDi>;
-export type RootDi = dikon.Of<RootDiBuilder>;
+export type RootDi = dikon.Of<ReturnType<typeof createRootDi>>;

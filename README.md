@@ -149,7 +149,7 @@ the public GitHub API. It shows:
 - an app shell that adapts the `wouter` router into a small service before DI,
 - a root container that accepts those externally initialized services,
 - lazy route folders that each build their own child container,
-- a declared feature flag plugin factory that requires root flag infrastructure,
+- a reusable feature flag pipe function that requires root flag infrastructure,
 - deterministic tests and stories that replace the live HTTP client through DI.
 
 See [`examples/react-complex/README.md`](./examples/react-complex/README.md) for the route and DI
@@ -190,9 +190,14 @@ const di = dikon()
 di[URL]; // "https://api.test/posts"
 ```
 
-## Plugins
+## Reusable Pipe Functions
 
-Use `dikon(...)` to package reusable builder steps, then pass the plugin to `.pipe(...)`.
+`.pipe(...)` passes the current builder to a function and returns that function's result. Use it
+when you want to stay in the builder chain while calling a helper, extracting a reusable builder
+step, or returning some derived value.
+
+Reusable pipe functions are just functions. If you want TypeScript to infer the builder parameter
+without writing the generics yourself, use `satisfies dikon.PipeFn`.
 
 ```ts
 const createHttpClient = (baseUrl: string) => ({
@@ -203,11 +208,10 @@ const createPostsApi = (httpClient: ReturnType<typeof createHttpClient>) => ({
   list: () => httpClient.get<readonly { id: number; title: string }[]>('/posts'),
 });
 
-const withHttpClient = dikon((builder) =>
+const withHttpClient = ((builder) =>
   builder.require<{ config: { readonly baseUrl: string } }>().provide({
     httpClient: ({ config }) => createHttpClient(config.baseUrl),
-  }),
-);
+  })) satisfies dikon.PipeFn;
 
 const di = dikon()
   .pipe(withHttpClient)
@@ -215,6 +219,16 @@ const di = dikon()
     postsApi: ({ httpClient }) => createPostsApi(httpClient),
   })
   .build({ config: { baseUrl: 'https://api.example.com' } });
+```
+
+You can also write the generic function explicitly if you prefer not to use `satisfies`:
+
+```ts
+function withHttpClient<TExistingDeps, TRequires>(builder: dikon.Dikon<TExistingDeps, TRequires>) {
+  return builder.require<{ config: { readonly baseUrl: string } }>().provide({
+    httpClient: ({ config }) => createHttpClient(config.baseUrl),
+  });
+}
 ```
 
 ## If You Really Need Disposal
@@ -225,7 +239,7 @@ be closed deterministically, keep cleanup as ordinary services instead of adding
 every provider.
 
 ```ts
-const withDisposal = dikon((builder) =>
+const withDisposal = ((builder) =>
   builder
     .provide({
       disposables(): Array<() => void | Promise<void>> {
@@ -245,8 +259,7 @@ const withDisposal = dikon((builder) =>
           }
         };
       },
-    }),
-);
+    })) satisfies dikon.PipeFn;
 
 const requestDi = dikon()
   .pipe(withDisposal)

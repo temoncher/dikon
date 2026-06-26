@@ -1,6 +1,6 @@
 import { dikon } from '../../../../dikon.ts';
 import type { RootDi } from '../di';
-import { createFeatureFlagsPlugin } from '../shared/featureFlags';
+import { createFeatureFlagsPipe } from '../shared/featureFlags';
 import type { IssueSummary, RepositoryConfig } from '../shared/githubTypes';
 import type { HttpClient } from '../shared/httpClient';
 
@@ -14,7 +14,7 @@ interface GithubIssueResponse {
   readonly pull_request?: unknown;
 }
 
-const withIssuesFlags = createFeatureFlagsPlugin({
+const withIssuesFlags = createFeatureFlagsPipe({
   namespace: 'issues',
   flags: {
     showAuthor: true,
@@ -56,5 +56,4 @@ export function createIssuesDi() {
     });
 }
 
-type IssuesDiBuilder = ReturnType<typeof createIssuesDi>;
-export type IssuesDi = dikon.Of<IssuesDiBuilder>;
+export type IssuesDi = dikon.Of<ReturnType<typeof createIssuesDi>>;

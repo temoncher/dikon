@@ -1,6 +1,6 @@
 import { dikon } from '../../../../dikon.ts';
 import type { RootDi } from '../di';
-import { createFeatureFlagsPlugin } from '../shared/featureFlags';
+import { createFeatureFlagsPipe } from '../shared/featureFlags';
 import type { CommitSummary, RepositoryConfig } from '../shared/githubTypes';
 import type { HttpClient } from '../shared/httpClient';
 
@@ -15,7 +15,7 @@ interface GithubCommitResponse {
   };
 }
 
-const withCommitsFlags = createFeatureFlagsPlugin({
+const withCommitsFlags = createFeatureFlagsPipe({
   namespace: 'commits',
   flags: {
     compactList: false,

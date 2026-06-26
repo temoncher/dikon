@@ -15,7 +15,7 @@ container from the root container.
 
 - React-owned services entering DI from the outside.
 - A root container shared by lazy route containers.
-- A plugin factory that turns declared feature flags into typed route services.
+- A reusable pipe function that turns declared feature flags into typed route services.
 - Domain folders that keep components, services, stories, and screenshot tests together.
 - Tests and stories replacing the HTTP client through DI.
 
@@ -38,18 +38,19 @@ Each route folder has a `create*Di.ts` file. A route container:
 
 - requires `RootDi`,
 - uses plain providers for route metadata,
-- pipes a declared feature flag plugin when the route needs typed flags,
+- pipes a declared feature flag helper when the route needs typed flags,
 - provides only its domain-specific GitHub request loader.
 
 This keeps route modules independent while still sharing shell services such as routing and the
 repository config.
 
-## Plugin Factory
+## Reusable Pipe Function
 
-`src/shared/featureFlags.ts` contains the plugin factory. Each route declares the flags it consumes:
+`src/shared/featureFlags.ts` contains the reusable pipe factory. Each route declares the flags it
+consumes:
 
 ```ts
-const withCommitsFlags = createFeatureFlagsPlugin({
+const withCommitsFlags = createFeatureFlagsPipe({
   namespace: 'commits',
   flags: {
     compactList: false,
@@ -58,10 +59,10 @@ const withCommitsFlags = createFeatureFlagsPlugin({
 });
 ```
 
-The plugin requires the root `featureFlagClient` and provides `featureFlags`, with typed boolean
+The pipe function requires the root `featureFlagClient` and provides `featureFlags`, with typed boolean
 properties from the declaration.
 
-That is the shape where a plugin earns its place: one configured feature needs root infrastructure
+That is the shape where a reusable function helps: one configured feature needs root infrastructure
 and provides route-local services. Simpler route metadata stays as plain `.provide(...)` calls.
 
 ## Tests And Stories

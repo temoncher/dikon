@@ -2,124 +2,110 @@ import { assertType, test } from 'vitest';
 
 import { dikon } from './dikon';
 
-test('types many plugins that provide dependent services', () => {
-  const withPlugin001 = dikon((builder) =>
+test('types many pipe functions that provide dependent services', () => {
+  const withStep001 = ((builder) =>
     builder.provide({
-      plugin001() {
+      step001() {
         return { value: '001' as const };
       },
-    }),
-  );
-  const withPlugin002 = dikon((builder) =>
-    builder.require<{ plugin001: { readonly value: '001' } }>().provide({
-      plugin002({ plugin001 }) {
-        return { value: `${plugin001.value}.002` as const };
+    })) satisfies dikon.PipeFn;
+  const withStep002 = ((builder) =>
+    builder.require<{ step001: { readonly value: '001' } }>().provide({
+      step002({ step001 }) {
+        return { value: `${step001.value}.002` as const };
       },
-    }),
-  );
-  const withPlugin003 = dikon((builder) =>
-    builder.require<{ plugin002: { readonly value: '001.002' } }>().provide({
-      plugin003({ plugin002 }) {
-        return { value: `${plugin002.value}.003` as const };
+    })) satisfies dikon.PipeFn;
+  const withStep003 = ((builder) =>
+    builder.require<{ step002: { readonly value: '001.002' } }>().provide({
+      step003({ step002 }) {
+        return { value: `${step002.value}.003` as const };
       },
-    }),
-  );
-  const withPlugin004 = dikon((builder) =>
-    builder.require<{ plugin003: { readonly value: '001.002.003' } }>().provide({
-      plugin004({ plugin003 }) {
-        return { value: `${plugin003.value}.004` as const };
+    })) satisfies dikon.PipeFn;
+  const withStep004 = ((builder) =>
+    builder.require<{ step003: { readonly value: '001.002.003' } }>().provide({
+      step004({ step003 }) {
+        return { value: `${step003.value}.004` as const };
       },
-    }),
-  );
-  const withPlugin005 = dikon((builder) =>
-    builder.require<{ plugin004: { readonly value: '001.002.003.004' } }>().provide({
-      plugin005({ plugin004 }) {
-        return { value: `${plugin004.value}.005` as const };
+    })) satisfies dikon.PipeFn;
+  const withStep005 = ((builder) =>
+    builder.require<{ step004: { readonly value: '001.002.003.004' } }>().provide({
+      step005({ step004 }) {
+        return { value: `${step004.value}.005` as const };
       },
-    }),
-  );
-  const withPlugin006 = dikon((builder) =>
-    builder.require<{ plugin005: { readonly value: '001.002.003.004.005' } }>().provide({
-      plugin006({ plugin005 }) {
-        return { value: `${plugin005.value}.006` as const };
+    })) satisfies dikon.PipeFn;
+  const withStep006 = ((builder) =>
+    builder.require<{ step005: { readonly value: '001.002.003.004.005' } }>().provide({
+      step006({ step005 }) {
+        return { value: `${step005.value}.006` as const };
       },
-    }),
-  );
-  const withPlugin007 = dikon((builder) =>
-    builder.require<{ plugin006: { readonly value: '001.002.003.004.005.006' } }>().provide({
-      plugin007({ plugin006 }) {
-        return { value: `${plugin006.value}.007` as const };
+    })) satisfies dikon.PipeFn;
+  const withStep007 = ((builder) =>
+    builder.require<{ step006: { readonly value: '001.002.003.004.005.006' } }>().provide({
+      step007({ step006 }) {
+        return { value: `${step006.value}.007` as const };
       },
-    }),
-  );
-  const withPlugin008 = dikon((builder) =>
-    builder.require<{ plugin007: { readonly value: '001.002.003.004.005.006.007' } }>().provide({
-      plugin008({ plugin007 }) {
-        return { value: `${plugin007.value}.008` as const };
+    })) satisfies dikon.PipeFn;
+  const withStep008 = ((builder) =>
+    builder.require<{ step007: { readonly value: '001.002.003.004.005.006.007' } }>().provide({
+      step008({ step007 }) {
+        return { value: `${step007.value}.008` as const };
       },
-    }),
-  );
-  const withPlugin009 = dikon((builder) =>
-    builder
-      .require<{ plugin008: { readonly value: '001.002.003.004.005.006.007.008' } }>()
-      .provide({
-        plugin009({ plugin008 }) {
-          return { value: `${plugin008.value}.009` as const };
-        },
-      }),
-  );
-  const withPlugin010 = dikon((builder) =>
+    })) satisfies dikon.PipeFn;
+  const withStep009 = ((builder) =>
+    builder.require<{ step008: { readonly value: '001.002.003.004.005.006.007.008' } }>().provide({
+      step009({ step008 }) {
+        return { value: `${step008.value}.009` as const };
+      },
+    })) satisfies dikon.PipeFn;
+  const withStep010 = ((builder) =>
     builder
       .require<{
-        plugin009: { readonly value: '001.002.003.004.005.006.007.008.009' };
+        step009: { readonly value: '001.002.003.004.005.006.007.008.009' };
       }>()
       .provide({
-        plugin010({ plugin009 }) {
-          return { value: `${plugin009.value}.010` as const };
+        step010({ step009 }) {
+          return { value: `${step009.value}.010` as const };
         },
-      }),
-  );
-  const withPlugin011 = dikon((builder) =>
+      })) satisfies dikon.PipeFn;
+  const withStep011 = ((builder) =>
     builder
       .require<{
-        plugin010: { readonly value: '001.002.003.004.005.006.007.008.009.010' };
+        step010: { readonly value: '001.002.003.004.005.006.007.008.009.010' };
       }>()
       .provide({
-        plugin011({ plugin010 }) {
-          return { value: `${plugin010.value}.011` as const };
+        step011({ step010 }) {
+          return { value: `${step010.value}.011` as const };
         },
-      }),
-  );
-  const withPlugin012 = dikon((builder) =>
+      })) satisfies dikon.PipeFn;
+  const withStep012 = ((builder) =>
     builder
       .require<{
-        plugin011: { readonly value: '001.002.003.004.005.006.007.008.009.010.011' };
+        step011: { readonly value: '001.002.003.004.005.006.007.008.009.010.011' };
       }>()
       .provide({
-        plugin012({ plugin011 }) {
-          return { value: `${plugin011.value}.012` as const };
+        step012({ step011 }) {
+          return { value: `${step011.value}.012` as const };
         },
-      }),
-  );
+      })) satisfies dikon.PipeFn;
 
   const di = dikon()
-    .pipe(withPlugin001)
-    .pipe(withPlugin002)
-    .pipe(withPlugin003)
-    .pipe(withPlugin004)
-    .pipe(withPlugin005)
-    .pipe(withPlugin006)
-    .pipe(withPlugin007)
-    .pipe(withPlugin008)
-    .pipe(withPlugin009)
-    .pipe(withPlugin010)
-    .pipe(withPlugin011)
-    .pipe(withPlugin012)
+    .pipe(withStep001)
+    .pipe(withStep002)
+    .pipe(withStep003)
+    .pipe(withStep004)
+    .pipe(withStep005)
+    .pipe(withStep006)
+    .pipe(withStep007)
+    .pipe(withStep008)
+    .pipe(withStep009)
+    .pipe(withStep010)
+    .pipe(withStep011)
+    .pipe(withStep012)
     .build();
 
   const expected = '001.002.003.004.005.006.007.008.009.010.011.012' as const;
 
-  assertType<typeof expected>(di.plugin012.value);
+  assertType<typeof expected>(di.step012.value);
 });
 
 test('types long dependent provide chains without excessive instantiation depth', () => {
