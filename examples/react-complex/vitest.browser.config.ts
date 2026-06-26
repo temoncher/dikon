@@ -13,7 +13,7 @@ export default defineConfig({
     browser: {
       api: {
         host: '127.0.0.1',
-        port: 63316,
+        port: 63357,
       },
       enabled: true,
       headless: true,
