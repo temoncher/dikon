@@ -7,24 +7,24 @@ describe('dikon', () => {
     vi.restoreAllMocks();
   });
 
-  test('creates independent dikons by calling dikon directly', () => {
-    const firstDikon = dikon().provide({
+  test('creates independent DI modules by calling dikon directly', () => {
+    const firstDiModule = dikon().provide({
       value() {
         return 'first';
       },
     });
-    const secondDikon = dikon().provide({
+    const secondDiModule = dikon().provide({
       value() {
         return 'second';
       },
     });
 
-    expect(firstDikon.build().value).toBe('first');
-    expect(secondDikon.build().value).toBe('second');
+    expect(firstDiModule.build().value).toBe('first');
+    expect(secondDiModule.build().value).toBe('second');
   });
 
-  test('merges a standalone dikon through use', () => {
-    const urlDikon = dikon()
+  test('merges a standalone DI module through use', () => {
+    const urlDiModule = dikon()
       .require<{ config: { readonly baseUrl: string } }>()
       .provide({
         url({ config }) {
@@ -33,19 +33,19 @@ describe('dikon', () => {
       });
 
     const dataDi = dikon()
-      .use(urlDikon)
+      .use(urlDiModule)
       .build({ config: { baseUrl: 'https://api.test' } });
 
     expect(dataDi.url).toBe('https://api.test/posts');
   });
 
-  test('satisfies a requirement from an earlier dikon', () => {
-    const baseDikon = dikon().provide({
+  test('satisfies a requirement from an earlier DI module', () => {
+    const baseDiModule = dikon().provide({
       base() {
         return 'base';
       },
     });
-    const labelDikon = dikon()
+    const labelDiModule = dikon()
       .require<{ base: string }>()
       .provide({
         label({ base }) {
@@ -53,14 +53,14 @@ describe('dikon', () => {
         },
       });
 
-    const di = dikon().use(baseDikon).use(labelDikon).build();
+    const di = dikon().use(baseDiModule).use(labelDiModule).build();
 
     expect(di.base).toBe('base');
     expect(di.label).toBe('base-label');
   });
 
-  test('lets a used dikon satisfy a previously required service', () => {
-    const clockDikon = dikon().provide({
+  test('lets a used DI module satisfy a previously required service', () => {
+    const clockDiModule = dikon().provide({
       clock() {
         return { now: () => 0 };
       },
@@ -73,28 +73,28 @@ describe('dikon', () => {
           return clock.now();
         },
       })
-      .use(clockDikon)
+      .use(clockDiModule)
       .build();
 
     expect(di.time).toBe(0);
   });
 
   test('snapshots layers so use does not share later mutations', () => {
-    const baseDikon = dikon().provide({
+    const baseDiModule = dikon().provide({
       base() {
         return 'base';
       },
     });
     const consumer = dikon()
-      .use(baseDikon)
+      .use(baseDiModule)
       .provide({
         extra() {
           return 'extra';
         },
       });
 
-    // Extending the consumer must not leak services back into the source dikon.
-    expect(Object.keys(baseDikon.build())).toEqual(['base']);
+    // Extending the consumer must not leak services back into the source DI module.
+    expect(Object.keys(baseDiModule.build())).toEqual(['base']);
 
     const consumerDi = consumer.build();
 
@@ -103,14 +103,14 @@ describe('dikon', () => {
   });
 
   test('composes layers for eager builds', () => {
-    const baseDikon = dikon().provide({
+    const baseDiModule = dikon().provide({
       base() {
         return 'base';
       },
     });
 
     const di = dikon()
-      .use(baseDikon)
+      .use(baseDiModule)
       .provide({
         label({ base }) {
           return `${base}-label`;
@@ -121,7 +121,7 @@ describe('dikon', () => {
     expect(di).toMatchObject({ base: 'base', label: 'base-label' });
   });
 
-  test('provide returns a new dikon and leaves the source unchanged', () => {
+  test('provide returns a new DI module and leaves the source unchanged', () => {
     const base = dikon().provide({
       shared() {
         return 'shared';
@@ -143,7 +143,7 @@ describe('dikon', () => {
     expect(Object.keys(withSecond.build())).toEqual(['shared', 'second']);
   });
 
-  test('override branches independently from a shared dikon', () => {
+  test('override branches independently from a shared DI module', () => {
     const base = dikon().provide({
       value() {
         return 'base';
@@ -153,12 +153,12 @@ describe('dikon', () => {
       value: () => 'overridden',
     });
 
-    // The shared dikon must not be polluted by overrides applied to a branch.
+    // The shared DI module must not be polluted by overrides applied to a branch.
     expect(base.build().value).toBe('base');
     expect(overridden.build().value).toBe('overridden');
   });
 
-  test('use branches independently from a shared dikon', () => {
+  test('use branches independently from a shared DI module', () => {
     const base = dikon().provide({
       shared() {
         return 'shared';
@@ -327,6 +327,94 @@ describe('dikon', () => {
 
     expect(di.service).toEqual({ id: 1 });
     expect(factoryCalls).toBe(1);
+  });
+
+  test('iterates already-created lazy instances without initializing unread services', () => {
+    const symbolKey = Symbol('symbolKey');
+    let firstCalls = 0;
+    let secondCalls = 0;
+    const di = dikon()
+      .provide({
+        first() {
+          firstCalls += 1;
+
+          return { name: 'first' };
+        },
+        second() {
+          secondCalls += 1;
+
+          return { name: 'second' };
+        },
+        [symbolKey]() {
+          return { name: 'symbol' };
+        },
+      })
+      .build();
+
+    const second = di.second;
+    const symbol = di[symbolKey];
+
+    expect([...dikon.instances(di)]).toEqual([
+      [symbolKey, symbol, di],
+      ['second', second, di],
+    ]);
+    expect(firstCalls).toBe(0);
+    expect(secondCalls).toBe(1);
+  });
+
+  test('iterates eager instances without including build values', () => {
+    const di = dikon()
+      .require<{ config: string }>()
+      .provide({
+        first() {
+          return 'first';
+        },
+      })
+      .provide({
+        second({ first }) {
+          return `${first}-second`;
+        },
+      })
+      .buildEager({ config: 'external' });
+
+    expect([...dikon.instances(di)]).toEqual([
+      ['second', 'first-second', di],
+      ['first', 'first', di],
+    ]);
+  });
+
+  test('iterates parent instances with the container that owns each instance', () => {
+    const parent = dikon()
+      .provide({
+        config() {
+          return { id: 'parent' };
+        },
+        rootOnly() {
+          return 'root';
+        },
+      })
+      .build();
+    const child = dikon()
+      .require<typeof parent>()
+      .provide({
+        label({ config }) {
+          return `label:${config.id}`;
+        },
+        route() {
+          return 'route';
+        },
+      })
+      .build(undefined, parent);
+
+    const label = child.label;
+    const route = child.route;
+
+    expect([...dikon.instances(child)]).toEqual([
+      ['route', route, child],
+      ['label', label, child],
+      ['config', parent.config, parent],
+    ]);
+    expect(parent.rootOnly).toBe('root');
   });
 
   test('builds services eagerly layer by layer', () => {
@@ -549,7 +637,7 @@ describe('dikon', () => {
     expect(child.url).toBe('https://parent.test/posts');
   });
 
-  test('builds containers with a parent from used dikons', () => {
+  test('builds containers with a parent from used DI modules', () => {
     const parent = dikon()
       .provide({
         config() {
@@ -558,7 +646,7 @@ describe('dikon', () => {
       })
       .build();
 
-    const httpClientDikon = dikon()
+    const httpClientDiModule = dikon()
       .require<{ config: { readonly baseUrl: string } }>()
       .provide({
         httpClient({ config }) {
@@ -570,7 +658,7 @@ describe('dikon', () => {
         },
       });
 
-    const child = dikon().require<typeof parent>().use(httpClientDikon).build(undefined, parent);
+    const child = dikon().require<typeof parent>().use(httpClientDiModule).build(undefined, parent);
 
     expect(Object.getPrototypeOf(child)).toBe(parent);
     expect(child.httpClient.get('/posts')).toBe('https://parent.test/posts');

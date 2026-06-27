@@ -2,7 +2,7 @@ import { assertType, expectTypeOf, test } from 'vitest';
 
 import { dikon } from './dikon';
 
-test('types reusable standalone dikons through use', () => {
+test('types reusable standalone DI modules through use', () => {
   const parent = dikon()
     .provide({
       config() {
@@ -10,7 +10,7 @@ test('types reusable standalone dikons through use', () => {
       },
     })
     .build();
-  const fortyTwoDikon = dikon()
+  const fortyTwoDiModule = dikon()
     .require<{ config: number }>()
     .provide({
       fortyTwo(di) {
@@ -18,20 +18,20 @@ test('types reusable standalone dikons through use', () => {
       },
     });
 
-  const child = dikon().require<typeof parent>().use(fortyTwoDikon).build(undefined, parent);
+  const child = dikon().require<typeof parent>().use(fortyTwoDiModule).build(undefined, parent);
 
   assertType<number>(child.fortyTwo);
 });
 
 test('returns readonly build output', () => {
-  const appDikon = dikon().provide({
+  const appDiModule = dikon().provide({
     value() {
       return 'ready';
     },
   });
 
-  type Dependencies = dikon.Of<typeof appDikon>;
-  const deps = appDikon.build();
+  type Dependencies = dikon.Of<typeof appDiModule>;
+  const deps = appDiModule.build();
 
   assertType<Readonly<{ value: string }>>(deps);
   assertType<Readonly<{ value: string }>>({} as Dependencies);
@@ -45,6 +45,29 @@ test('keeps required build values readonly in build output', () => {
 
   // @ts-expect-error required build values are readonly on the container
   di.config = 11;
+});
+
+test('types instance iterator entries without making containers iterable', () => {
+  const di = dikon()
+    .provide({
+      value() {
+        return 1;
+      },
+    })
+    .build();
+
+  const entries = dikon.instances(di);
+
+  assertType<IterableIterator<dikon.InstanceEntry>>(entries);
+
+  for (const [key, instance, ownerDi] of entries) {
+    assertType<PropertyKey>(key);
+    assertType<unknown>(instance);
+    assertType<object>(ownerDi);
+  }
+
+  // @ts-expect-error built containers are plain objects, not iterables
+  assertType<Iterable<unknown>>(di);
 });
 
 test('passes readonly dependencies to providers and overrides', () => {
@@ -83,7 +106,7 @@ test('infers required and provided dependencies', () => {
     list: () => httpClient.get<readonly { id: number; title: string }[]>('/posts'),
   });
 
-  const appDikon = dikon()
+  const appDiModule = dikon()
     .require<{ config: { readonly baseUrl: string } }>()
     .provide({
       httpClient: ({ config }) => createHttpClient(config.baseUrl),
@@ -92,7 +115,7 @@ test('infers required and provided dependencies', () => {
       postsApi: ({ httpClient }) => createPostsApi(httpClient),
     });
 
-  type Dependencies = dikon.Of<typeof appDikon>;
+  type Dependencies = dikon.Of<typeof appDiModule>;
 
   expectTypeOf<Dependencies['config']>().toEqualTypeOf<{ readonly baseUrl: string }>();
   expectTypeOf<Dependencies['httpClient']>().toEqualTypeOf<{
@@ -103,9 +126,9 @@ test('infers required and provided dependencies', () => {
   }>();
 
   // @ts-expect-error config is required
-  appDikon.build();
+  appDiModule.build();
 
-  const di = appDikon.build({ config: { baseUrl: 'https://api.example.com' } });
+  const di = appDiModule.build({ config: { baseUrl: 'https://api.example.com' } });
 
   assertType<Promise<readonly { id: number; title: string }[]>>(di.postsApi.list());
 });
@@ -137,20 +160,20 @@ test('types parent containers with dikon methods', () => {
     })
     .build();
 
-  const childDikon = dikon()
+  const childDiModule = dikon()
     .require<typeof parent>()
     .provide({
       url({ config }) {
         return `${config.baseUrl}/posts`;
       },
     });
-  const child = childDikon.build(undefined, parent);
+  const child = childDiModule.build(undefined, parent);
 
   assertType<string>(child.url);
   expectTypeOf(child.config).toEqualTypeOf<typeof parent.config>();
 
   // @ts-expect-error parent is required when type-only deps are not provided
-  childDikon.build();
+  childDiModule.build();
 });
 
 test('keeps local requirements in the first build argument', () => {
@@ -162,7 +185,7 @@ test('keeps local requirements in the first build argument', () => {
     })
     .build();
 
-  const childDikon = dikon()
+  const childDiModule = dikon()
     .require<typeof parent>()
     .require<{ seed: string }>()
     .provide({
@@ -171,14 +194,14 @@ test('keeps local requirements in the first build argument', () => {
       },
     });
 
-  childDikon.build({ seed: 'posts' }, parent);
-  childDikon.buildEager({ seed: 'posts' }, parent);
+  childDiModule.build({ seed: 'posts' }, parent);
+  childDiModule.buildEager({ seed: 'posts' }, parent);
 
   // @ts-expect-error seed is still required even when a parent is passed
-  childDikon.build(undefined, parent);
+  childDiModule.build(undefined, parent);
 });
 
-test('types parent containers alongside used dikons', () => {
+test('types parent containers alongside used DI modules', () => {
   const parent = dikon()
     .provide({
       config() {
@@ -187,7 +210,7 @@ test('types parent containers alongside used dikons', () => {
     })
     .build();
 
-  const urlDikon = dikon()
+  const urlDiModule = dikon()
     .require<{ config: { baseUrl: string } }>()
     .provide({
       url({ config }) {
@@ -195,7 +218,7 @@ test('types parent containers alongside used dikons', () => {
       },
     });
 
-  const child = dikon().require<typeof parent>().use(urlDikon).build(undefined, parent);
+  const child = dikon().require<typeof parent>().use(urlDiModule).build(undefined, parent);
 
   assertType<string>(child.url);
   expectTypeOf(child.config).toEqualTypeOf<typeof parent.config>();
@@ -207,7 +230,7 @@ test('provided values satisfy requirements', () => {
     readonly theme: { readonly name: string };
   }
 
-  const appDikon = dikon()
+  const appDiModule = dikon()
     .require<RootDeps>()
     .require<{ appConfig: { readonly title: string } }>()
     .provide({
@@ -222,7 +245,7 @@ test('provided values satisfy requirements', () => {
       },
     });
 
-  const di = appDikon.build({ appConfig: { title: 'Board' } });
+  const di = appDiModule.build({ appConfig: { title: 'Board' } });
 
   assertType<string>(di.title);
 });
@@ -233,7 +256,7 @@ test('overridden values satisfy requirements', () => {
     readonly theme: { readonly name: string };
   }
 
-  const appDikon = dikon()
+  const appDiModule = dikon()
     .require<RootDeps>()
     .require<{ appConfig: { readonly title: string } }>()
     .override({
@@ -246,7 +269,7 @@ test('overridden values satisfy requirements', () => {
       },
     });
 
-  const di = appDikon.build({ appConfig: { title: 'Board' } });
+  const di = appDiModule.build({ appConfig: { title: 'Board' } });
 
   assertType<string>(di.title);
 });
@@ -257,20 +280,20 @@ test('partially overridden values leave other requirements in place', () => {
     readonly theme: { readonly name: string };
   }
 
-  const appDikon = dikon()
+  const appDiModule = dikon()
     .require<RootDeps>()
     .override({
       currentUser: () => ({ name: 'Test User' }),
     });
 
   // @ts-expect-error theme is still required when only currentUser is overridden
-  appDikon.build();
+  appDiModule.build();
 
-  appDikon.build({ theme: { name: 'Test Theme' } });
+  appDiModule.build({ theme: { name: 'Test Theme' } });
 });
 
-test('bubbles up requirements from a used dikon', () => {
-  const httpClientDikon = dikon()
+test('bubbles up requirements from a used DI module', () => {
+  const httpClientDiModule = dikon()
     .require<{ config: { readonly baseUrl: string } }>()
     .provide({
       url({ config }) {
@@ -278,43 +301,45 @@ test('bubbles up requirements from a used dikon', () => {
       },
     });
 
-  const appDikon = dikon().use(httpClientDikon);
+  const appDiModule = dikon().use(httpClientDiModule);
 
-  // @ts-expect-error config is required by the used dikon
-  appDikon.build();
+  // @ts-expect-error config is required by the used DI module
+  appDiModule.build();
 
-  const di = appDikon.build({ config: { baseUrl: 'https://api.test' } });
+  const di = appDiModule.build({ config: { baseUrl: 'https://api.test' } });
 
   assertType<string>(di.url);
 });
 
-test('types service instances contributed by a used dikon', () => {
+test('types service instances contributed by a used DI module', () => {
   const createHttpClient = (baseUrl: string) => ({
     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
   });
 
-  const httpClientDikon = dikon()
+  const httpClientDiModule = dikon()
     .require<{ config: { readonly baseUrl: string } }>()
     .provide({
       httpClient: ({ config }) => createHttpClient(config.baseUrl),
     });
 
-  const appDikon = dikon().require<{ config: { readonly baseUrl: string } }>().use(httpClientDikon);
+  const appDiModule = dikon()
+    .require<{ config: { readonly baseUrl: string } }>()
+    .use(httpClientDiModule);
 
-  const di = appDikon.build({ config: { baseUrl: 'https://api.example.com' } });
+  const di = appDiModule.build({ config: { baseUrl: 'https://api.example.com' } });
 
   assertType<Promise<readonly { id: number; title: string }[]>>(
     di.httpClient.get<readonly { id: number; title: string }[]>('/posts'),
   );
 });
 
-test('satisfies requirements from earlier dikons without bubbling them up', () => {
-  const configDikon = dikon().provide({
+test('satisfies requirements from earlier DI modules without bubbling them up', () => {
+  const configDiModule = dikon().provide({
     config() {
       return { baseUrl: 'https://api.test' };
     },
   });
-  const urlDikon = dikon()
+  const urlDiModule = dikon()
     .require<{ config: { readonly baseUrl: string } }>()
     .provide({
       url({ config }) {
@@ -322,34 +347,34 @@ test('satisfies requirements from earlier dikons without bubbling them up', () =
       },
     });
 
-  const di = dikon().use(configDikon).use(urlDikon).build();
+  const di = dikon().use(configDiModule).use(urlDiModule).build();
 
   assertType<string>(di.url);
 });
 
-test('lets a used dikon satisfy a previously required service', () => {
-  const clockDikon = dikon().provide({
+test('lets a used DI module satisfy a previously required service', () => {
+  const clockDiModule = dikon().provide({
     clock() {
       return { now: () => 0 };
     },
   });
 
-  const appDikon = dikon()
+  const appDiModule = dikon()
     .require<{ clock: { now(): number } }>()
     .provide({
       time({ clock }) {
         return clock.now();
       },
     })
-    .use(clockDikon);
+    .use(clockDiModule);
 
-  const di = appDikon.build();
+  const di = appDiModule.build();
 
   assertType<number>(di.time);
 });
 
 test('restricts overrides to existing services with the existing service type', () => {
-  const appDikon = dikon().provide({
+  const appDiModule = dikon().provide({
     count() {
       return 1;
     },
@@ -358,15 +383,15 @@ test('restricts overrides to existing services with the existing service type', 
     },
   });
 
-  appDikon.override({
+  appDiModule.override({
     count: () => 2,
     label: ({ count }) => `count:${count}`,
   });
 
   // @ts-expect-error missing was never provided
-  appDikon.override({ missing: () => true });
+  appDiModule.override({ missing: () => true });
 
-  appDikon.override({
+  appDiModule.override({
     // @ts-expect-error count must remain a number
     count: () => 'two',
   });

@@ -1,18 +1,22 @@
-import { use, useMemo } from 'react';
+import { useMemo } from 'react';
 
-import { RootDiContext } from '../di';
+import type { RouterService } from '../shared/routerTypes';
 import { useAsyncValue } from '../shared/useAsyncValue';
-import { dashboardDikon } from './dashboardDi';
+import { dashboardDiModule } from './dashboardDi';
+import type { DashboardDeps } from './dashboardDi';
 
-export default function DashboardRoute() {
-  const rootDi = use(RootDiContext);
-  const di = useMemo(() => dashboardDikon.build(undefined, rootDi), [rootDi]);
+interface DashboardRouteProps {
+  readonly shellDi: DashboardDeps & { readonly router: RouterService };
+}
+
+export default function DashboardRoute({ shellDi }: DashboardRouteProps) {
+  const di = useMemo(() => dashboardDiModule.build(undefined, shellDi), [shellDi]);
   const summary = useAsyncValue(di.loadRepository);
 
   return (
     <section className='repo-lens__panel' data-testid='route-panel'>
       <p className='repo-lens__section-title'>{di.routeMetadata.title}</p>
-      {summary.loading ? <p>Loading repository...</p> : null}
+      {summary.isPending ? <p>Loading repository...</p> : null}
       {summary.error === null ? null : <p role='alert'>{summary.error}</p>}
       {summary.value === null ? null : (
         <>
@@ -33,10 +37,10 @@ export default function DashboardRoute() {
             </div>
           </dl>
           <div className='repo-lens__actions'>
-            <button onClick={() => rootDi.router.navigate({ id: 'commits' })} type='button'>
+            <button onClick={() => shellDi.router.navigate({ id: 'commits' })} type='button'>
               View commits
             </button>
-            <button onClick={() => rootDi.router.navigate({ id: 'issues' })} type='button'>
+            <button onClick={() => shellDi.router.navigate({ id: 'issues' })} type='button'>
               View issues
             </button>
           </div>

@@ -1,8 +1,16 @@
 import { dikon } from '../../../../dikon.ts';
-import type { RootDi } from '../di';
-import { createFeatureFlagsDikon } from '../shared/featureFlags';
+import { dispose } from '../shared/disposable';
+import type { Disposable } from '../shared/disposable';
+import { createFeatureFlagsDiModule } from '../shared/featureFlags';
+import type { FeatureFlagClient } from '../shared/featureFlags';
 import type { CommitSummary, RepositoryConfig } from '../shared/githubTypes';
 import type { HttpClient } from '../shared/httpClient';
+
+export interface CommitsDeps {
+  readonly featureFlagClient: FeatureFlagClient;
+  readonly httpClient: HttpClient;
+  readonly repositoryConfig: RepositoryConfig;
+}
 
 interface GithubCommitResponse {
   readonly sha: string;
@@ -15,7 +23,7 @@ interface GithubCommitResponse {
   };
 }
 
-const commitsFlagsDikon = createFeatureFlagsDikon({
+const commitsFlagsDiModule = createFeatureFlagsDiModule({
   namespace: 'commits',
   flags: {
     compactList: false,
@@ -23,25 +31,102 @@ const commitsFlagsDikon = createFeatureFlagsDikon({
   },
 });
 
-async function loadCommits(
-  httpClient: HttpClient,
-  repository: RepositoryConfig,
-): Promise<readonly CommitSummary[]> {
-  const data = await httpClient.get<readonly GithubCommitResponse[]>(
-    `/repos/${repository.owner}/${repository.repo}/commits?per_page=5`,
-  );
-
-  return data.map((commit) => ({
-    sha: commit.sha.slice(0, 7),
-    message: commit.commit.message.split('\n')[0] ?? commit.commit.message,
-    authorName: commit.commit.author?.name ?? 'Unknown author',
-    htmlUrl: commit.html_url,
-  }));
+interface LoadCommitsDeps {
+  readonly httpClient: HttpClient;
+  readonly repositoryConfig: RepositoryConfig;
 }
 
-export const commitsDikon = dikon()
-  .require<RootDi>()
-  .use(commitsFlagsDikon)
+type CommitsRefreshSubscriber = () => void;
+
+interface CommitsRefreshService extends Disposable {
+  getSnapshot(): number;
+  start(refresh: () => void): void;
+  subscribe(subscriber: CommitsRefreshSubscriber): () => void;
+}
+
+const COMMITS_REFRESH_INTERVAL_SECONDS = 5;
+
+function createLoadCommits({ httpClient, repositoryConfig }: LoadCommitsDeps) {
+  return async (options?: { signal: AbortSignal }) => {
+    // oxlint-disable-next-line no-promise-executor-return promise/avoid-new -- imitate network latency for demo purposes
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+    const data = await httpClient.get<readonly GithubCommitResponse[]>(
+      `/repos/${repositoryConfig.owner}/${repositoryConfig.repo}/commits?per_page=5`,
+      {
+        operation: 'commits.loadCommits',
+        signal: options?.signal,
+      },
+    );
+
+    return data.map(
+      (commit): CommitSummary => ({
+        sha: commit.sha.slice(0, 7),
+        message: commit.commit.message.split('\n')[0] ?? commit.commit.message,
+        authorName: commit.commit.author?.name ?? 'Unknown author',
+        htmlUrl: commit.html_url,
+      }),
+    );
+  };
+}
+
+function createCommitsRefreshService(): CommitsRefreshService {
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+  let secondsUntilRefresh = COMMITS_REFRESH_INTERVAL_SECONDS;
+  let refresh: (() => void) | null = null;
+  const subscribers = new Set<CommitsRefreshSubscriber>();
+
+  function setSecondsUntilRefresh(seconds: number) {
+    secondsUntilRefresh = seconds;
+
+    for (const subscriber of subscribers) {
+      subscriber();
+    }
+  }
+
+  return {
+    getSnapshot() {
+      return secondsUntilRefresh;
+    },
+    subscribe(subscriber) {
+      subscribers.add(subscriber);
+
+      return () => {
+        subscribers.delete(subscriber);
+      };
+    },
+    start(nextRefresh) {
+      refresh = nextRefresh;
+
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+      }
+
+      intervalId = setInterval(() => {
+        if (secondsUntilRefresh <= 1) {
+          refresh?.();
+          setSecondsUntilRefresh(COMMITS_REFRESH_INTERVAL_SECONDS);
+          return;
+        }
+
+        setSecondsUntilRefresh(secondsUntilRefresh - 1);
+      }, 1_000);
+    },
+    [dispose]() {
+      if (intervalId === null) {
+        return;
+      }
+
+      clearInterval(intervalId);
+      intervalId = null;
+      refresh = null;
+    },
+  };
+}
+
+export const commitsDiModule = dikon()
+  .require<CommitsDeps>()
+  .use(commitsFlagsDiModule)
   .provide({
     routeMetadata() {
       return {
@@ -49,9 +134,8 @@ export const commitsDikon = dikon()
         title: 'Recent commits',
       };
     },
-    loadCommits({ httpClient, repositoryConfig }) {
-      return () => loadCommits(httpClient, repositoryConfig);
-    },
+    loadCommits: createLoadCommits,
+    commitsRefreshService: createCommitsRefreshService,
   });
 
-export type CommitsDi = dikon.Of<typeof commitsDikon>;
+export type CommitsDi = dikon.Of<typeof commitsDiModule>;

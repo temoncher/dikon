@@ -19,6 +19,46 @@ export function dikon(): dikon.Dikon<{}, {}> {
 }
 
 /**
+ * Iterates already-created service instances, starting from the given
+ * container and then walking parent Dikon containers through the prototype
+ * chain. It does not initialize unread lazy services, and it does not include
+ * required build values supplied to `build(...)`.
+ *
+ * ```ts
+ * const rootDi = dikon()
+ *     .provide({
+ *         rootService() {
+ *             return { id: 'root' };
+ *         },
+ *     })
+ *     .build();
+ *
+ * const routeDi = dikon()
+ *     .require<typeof rootDi>()
+ *     .provide({
+ *         routeService({ rootService }) {
+ *             return { rootId: rootService.id };
+ *         },
+ *     })
+ *     .build(undefined, rootDi);
+ *
+ * routeDi.routeService;
+ *
+ * for (const [key, instance, ownerDi] of dikon.instances(routeDi)) {
+ *     // Stop before root services so route-only handling does not touch app-scoped instances.
+ *     if (ownerDi === rootDi) {
+ *         break;
+ *     }
+ *
+ *     // Handle route-owned instances only.
+ * }
+ * ```
+ */
+dikon.instances = function instances(container: object): IterableIterator<dikon.InstanceEntry> {
+  return iterateInstances(container);
+};
+
+/**
  * The single runtime export for Dikon.
  *
  * ```ts
@@ -37,6 +77,8 @@ export function dikon(): dikon.Dikon<{}, {}> {
  * ```
  */
 export namespace dikon {
+  export type InstanceEntry = readonly [key: PropertyKey, instance: unknown, di: object];
+
   /**
    * Extracts the built container type from a composed dikon.
    *
@@ -44,7 +86,7 @@ export namespace dikon {
    * container type without exporting the internal type ledgers.
    *
    * ```ts
-   * export const appDikon = dikon()
+   * export const appDiModule = dikon()
    *     .require<{ config: { readonly baseUrl: string } }>()
    *     .provide({
    *         url({ config }) {
@@ -52,7 +94,7 @@ export namespace dikon {
    *         },
    *     });
    *
-   * export type AppDi = dikon.Of<typeof appDikon>;
+   * export type AppDi = dikon.Of<typeof appDiModule>;
    *
    * const getPostsUrl = (di: AppDi) => di.url;
    * ```
@@ -60,7 +102,7 @@ export namespace dikon {
   export type Of<T extends Dikon<any, any>> = Built<T[typeof __dikonTypes]['existingDeps']>;
 
   /**
-   * A composable Dikon builder.
+   * A composable DI module builder.
    *
    * The generic parameters are internal type ledgers:
    *
@@ -73,7 +115,7 @@ export namespace dikon {
    * `.use(...)` chains.
    *
    * ```ts
-   * const appDikon = dikon()
+   * const appDiModule = dikon()
    *     .require<{ config: { readonly baseUrl: string } }>()
    *     .provide({
    *         url({ config }) {
@@ -81,7 +123,7 @@ export namespace dikon {
    *         },
    *     });
    *
-   * const di = appDikon.build({ config: { baseUrl: 'https://api.test' } });
+   * const di = appDiModule.build({ config: { baseUrl: 'https://api.test' } });
    *
    * di.url; // 'https://api.test/posts'
    * ```
@@ -234,7 +276,7 @@ export namespace dikon {
     ): Built<TExistingDeps>;
     buildEager(...args: StandaloneBuildArgs<TRequires>): Built<TExistingDeps>;
     /**
-     * Merges another standalone dikon into this one. That dikon is authored
+     * Merges another standalone DI module into this one. That DI module is authored
      * as its own `dikon()` chain with concrete types, so its services and
      * requirements are type-checked once, in isolation, instead of being
      * re-instantiated against this dikon's generic type parameters.
@@ -249,12 +291,12 @@ export namespace dikon {
      *     get: <T>(path: string) => fetch(`${baseUrl}${path}`).then((r) => r.json() as Promise<T>),
      * });
      *
-     * const httpClientDikon = dikon()
+     * const httpClientDiModule = dikon()
      *     .require<{ config: { readonly baseUrl: string } }>()
      *     .provide({ httpClient: ({ config }) => createHttpClient(config.baseUrl) });
      *
      * const di = dikon()
-     *     .use(httpClientDikon)
+     *     .use(httpClientDiModule)
      *     .build({ config: { baseUrl: 'https://api.example.com' } });
      *
      * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
@@ -288,6 +330,7 @@ type ToInstances<T> = Simplify<{
 type Built<T> = Readonly<T>;
 
 type FactoryMap = Record<PropertyKey, (di: unknown) => unknown>;
+type InstanceCache = Map<PropertyKey, unknown>;
 type AnyDikon = dikon.Dikon<any, any>;
 
 type DikonExistingDeps<T extends AnyDikon> = T[typeof __dikonTypes]['existingDeps'];
@@ -362,7 +405,7 @@ const dikonMethods = {
   },
 };
 
-// Dikons are immutable: provide/override/use return a fresh dikon over a new layers array
+// DI modules are immutable: provide/override/use return a fresh DI module over a new layers array
 // rather than mutating in place. A dikon composed once at module scope can be shared and
 // built repeatedly without one branch's overrides leaking into another.
 function createDikon(layers: Layer[]): dikon.Dikon<{}, {}> {
@@ -380,23 +423,26 @@ function buildContainer<TExistingDeps, TRequires>(
   parent: object | undefined,
 ): TExistingDeps {
   const di = createContainer(buildRequires, parent);
-  Object.defineProperty(di, __instances, {
-    value: {} as Record<PropertyKey, unknown>,
-    configurable: false,
-    enumerable: false,
-    writable: false,
-  });
+  const instanceCache = defineInstanceCache(di);
 
   for (const layer of instance.__layers) {
     for (const serviceName of getOwnEnumerableKeys(layer.deps)) {
       Object.defineProperty(di, serviceName, {
         get() {
-          const existingInstances = di[__instances] as Record<PropertyKey, unknown>;
+          if (instanceCache.has(serviceName)) {
+            return instanceCache.get(serviceName);
+          }
+
           const serviceFactory = layer.deps[serviceName];
+          const instance = serviceFactory?.(di);
 
           // Nullish results are treated as uncached, so factories returning
           // undefined or null will run again on the next read.
-          return (existingInstances[serviceName] ??= serviceFactory?.(di));
+          if (instance !== undefined && instance !== null) {
+            instanceCache.set(serviceName, instance);
+          }
+
+          return instance;
         },
         configurable: true, // needed so that existing keys can be overwritten
         enumerable: true,
@@ -413,6 +459,7 @@ function buildEagerContainer<TExistingDeps, TRequires>(
   parent: object | undefined,
 ): TExistingDeps {
   const di = createContainer(buildRequires, parent);
+  const instanceCache = defineInstanceCache(di);
 
   for (const layer of createEagerLayers(instance.__layers)) {
     const serviceNames = getOwnEnumerableKeys(layer);
@@ -424,7 +471,13 @@ function buildEagerContainer<TExistingDeps, TRequires>(
     }
 
     for (const serviceName of serviceNames) {
-      defineReadonlyProperty(di, serviceName, layerInstances[serviceName]);
+      const instance = layerInstances[serviceName];
+
+      if (instance !== undefined && instance !== null) {
+        instanceCache.set(serviceName, instance);
+      }
+
+      defineReadonlyProperty(di, serviceName, instance);
     }
   }
 
@@ -444,6 +497,55 @@ function createContainer(
   }
 
   return container;
+}
+
+function defineInstanceCache(container: Record<PropertyKey, unknown>): InstanceCache {
+  const instanceCache: InstanceCache = new Map();
+
+  Object.defineProperty(container, __instances, {
+    value: instanceCache,
+    configurable: false,
+    enumerable: false,
+    writable: false,
+  });
+
+  return instanceCache;
+}
+
+function* iterateInstances(container: object): IterableIterator<dikon.InstanceEntry> {
+  let current: object | null = container;
+
+  while (current !== null) {
+    const instanceCache = getInstanceCache(current);
+
+    if (instanceCache !== undefined) {
+      const entries = [...instanceCache.entries()];
+
+      for (let index = entries.length - 1; index >= 0; index -= 1) {
+        const entry = entries[index];
+
+        if (entry === undefined) {
+          continue;
+        }
+
+        const [key, instance] = entry;
+
+        yield [key, instance, current];
+      }
+    }
+
+    current = Object.getPrototypeOf(current);
+  }
+}
+
+function getInstanceCache(container: object): InstanceCache | undefined {
+  if (!Object.prototype.hasOwnProperty.call(container, __instances)) {
+    return undefined;
+  }
+
+  const value = (container as Record<PropertyKey, unknown>)[__instances];
+
+  return value instanceof Map ? value : undefined;
 }
 
 // Eager builds resolve providers layer-by-layer, but overrides should replace

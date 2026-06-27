@@ -122,6 +122,12 @@ a {
   color: #66727c;
 }
 
+.repo-lens__meta {
+  margin: -8px 0 0;
+  color: #66727c;
+  font-size: 0.9rem;
+}
+
 .repo-lens__stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -169,6 +175,25 @@ a {
 
 .repo-lens__list--compact li {
   padding: 8px 10px;
+}
+
+.repo-lens__list--refreshing li {
+  animation: repo-lens-refresh-flash 1.2s ease-in-out infinite;
+  border-color: #8eb0c8;
+  background: #eef6fa;
+}
+
+@keyframes repo-lens-refresh-flash {
+  0%,
+  100% {
+    border-color: #8eb0c8;
+    background: #eef6fa;
+  }
+
+  50% {
+    border-color: #bfd4e2;
+    background: #f8fafb;
+  }
 }
 
 .repo-lens__list span {

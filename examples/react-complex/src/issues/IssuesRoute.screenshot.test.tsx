@@ -2,8 +2,7 @@ import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { page } from 'vitest/browser';
 
-import { RootDiContext, rootDikon } from '../di';
-import { createFeatureFlagClient } from '../shared/featureFlags';
+import { createStaticFeatureFlagClient } from '../shared/featureFlags';
 import {
   createEmptyHttpClient,
   createErrorHttpClient,
@@ -31,21 +30,25 @@ const states = [
   },
 ];
 
+const repositoryConfig = {
+  owner: 'temoncher',
+  repo: 'dikon',
+  fullName: 'temoncher/dikon',
+};
+
+const noopRouter = {
+  navigate: () => undefined,
+};
+
 test.each(states)('$name visual state stays stable', async ({ httpClient, name }) => {
-  await render(
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient(),
-        httpClient,
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <IssuesRoute />
-    </RootDiContext>,
-  );
+  const shellDi = {
+    featureFlagClient: createStaticFeatureFlagClient({}),
+    httpClient,
+    repositoryConfig,
+    router: noopRouter,
+  };
+
+  await render(<IssuesRoute shellDi={shellDi} />);
 
   await expect(page.getByTestId('route-panel')).toMatchScreenshot(name);
 });

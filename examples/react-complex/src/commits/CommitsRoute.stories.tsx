@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { RootDiContext, rootDikon } from '../di';
-import { createFeatureFlagClient } from '../shared/featureFlags';
+import { createStaticFeatureFlagClient } from '../shared/featureFlags';
 import {
   createEmptyHttpClient,
   createErrorHttpClient,
@@ -20,91 +19,81 @@ const meta = {
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj;
+
+const repositoryConfig = {
+  owner: 'temoncher',
+  repo: 'dikon',
+  fullName: 'temoncher/dikon',
+};
+
+const noopRouter = {
+  navigate: () => undefined,
+};
 
 export const Loading: Story = {
   render: () => (
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient(),
+    <CommitsRoute
+      shellDi={{
+        featureFlagClient: createStaticFeatureFlagClient({}),
         httpClient: createLoadingHttpClient(),
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <CommitsRoute />
-    </RootDiContext>
+        repositoryConfig,
+        router: noopRouter,
+      }}
+    />
   ),
 };
 
 export const Error: Story = {
   render: () => (
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient(),
+    <CommitsRoute
+      shellDi={{
+        featureFlagClient: createStaticFeatureFlagClient({}),
         httpClient: createErrorHttpClient('Commits unavailable'),
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <CommitsRoute />
-    </RootDiContext>
+        repositoryConfig,
+        router: noopRouter,
+      }}
+    />
   ),
 };
 
 export const Success: Story = {
   render: () => (
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient(),
+    <CommitsRoute
+      shellDi={{
+        featureFlagClient: createStaticFeatureFlagClient({}),
         httpClient: createFakeHttpClient(),
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <CommitsRoute />
-    </RootDiContext>
+        repositoryConfig,
+        router: noopRouter,
+      }}
+    />
   ),
 };
 
 export const SuccessAuthorHidden: Story = {
   render: () => (
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient({
+    <CommitsRoute
+      shellDi={{
+        featureFlagClient: createStaticFeatureFlagClient({
           'commits.showAuthor': false,
         }),
         httpClient: createFakeHttpClient(),
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <CommitsRoute />
-    </RootDiContext>
+        repositoryConfig,
+        router: noopRouter,
+      }}
+    />
   ),
 };
 
 export const Empty: Story = {
   render: () => (
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient(),
+    <CommitsRoute
+      shellDi={{
+        featureFlagClient: createStaticFeatureFlagClient({}),
         httpClient: createEmptyHttpClient(),
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <CommitsRoute />
-    </RootDiContext>
+        repositoryConfig,
+        router: noopRouter,
+      }}
+    />
   ),
 };

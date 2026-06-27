@@ -1,7 +1,11 @@
 import { dikon } from '../../../../dikon.ts';
-import type { RootDi } from '../di';
 import type { RepositoryConfig, RepositorySummary } from '../shared/githubTypes';
 import type { HttpClient } from '../shared/httpClient';
+
+export interface DashboardDeps {
+  readonly httpClient: HttpClient;
+  readonly repositoryConfig: RepositoryConfig;
+}
 
 interface GithubRepositoryResponse {
   readonly full_name: string;
@@ -12,33 +16,36 @@ interface GithubRepositoryResponse {
   readonly html_url: string;
 }
 
-function loadRepository(
-  httpClient: HttpClient,
-  repository: RepositoryConfig,
-): Promise<RepositorySummary> {
-  return httpClient
-    .get<GithubRepositoryResponse>(`/repos/${repository.owner}/${repository.repo}`)
-    .then((data) => ({
+function createLoadRepository({ httpClient, repositoryConfig }: DashboardDeps) {
+  return async (options?: { signal: AbortSignal }) => {
+    const data = await httpClient.get<GithubRepositoryResponse>(
+      `/repos/${repositoryConfig.owner}/${repositoryConfig.repo}`,
+      {
+        operation: 'dashboard.loadRepository',
+        signal: options?.signal,
+      },
+    );
+
+    return {
       fullName: data.full_name,
       description: data.description ?? 'No description provided.',
       stars: data.stargazers_count,
       forks: data.forks_count,
       openIssues: data.open_issues_count,
       htmlUrl: data.html_url,
-    }));
+    } satisfies RepositorySummary;
+  };
 }
 
-export const dashboardDikon = dikon()
-  .require<RootDi>()
+export const dashboardDiModule = dikon()
+  .require<DashboardDeps>()
   .provide({
     routeMetadata() {
       return {
         title: 'Repository overview',
       };
     },
-    loadRepository({ httpClient, repositoryConfig }) {
-      return () => loadRepository(httpClient, repositoryConfig);
-    },
+    loadRepository: createLoadRepository,
   });
 
-export type DashboardDi = dikon.Of<typeof dashboardDikon>;
+export type DashboardDi = dikon.Of<typeof dashboardDiModule>;

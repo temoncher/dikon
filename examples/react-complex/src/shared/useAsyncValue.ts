@@ -1,35 +1,66 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 
 export interface AsyncState<TValue> {
   readonly error: string | null;
-  readonly loading: boolean;
+  readonly isFetching: boolean;
+  readonly isPending: boolean;
+  readonly isRefetching: boolean;
+  refresh(): void;
   readonly value: TValue | null;
 }
 
-export function useAsyncValue<TValue>(load: () => Promise<TValue>): AsyncState<TValue> {
+export function useAsyncValue<TValue>(
+  load: (options?: { signal: AbortSignal }) => Promise<TValue>,
+) {
+  const [refreshVersion, refresh] = useReducer((version: number) => version + 1, 0);
   const [state, setState] = useState<AsyncState<TValue>>({
     error: null,
-    loading: true,
+    isFetching: true,
+    isPending: true,
+    isRefetching: false,
+    refresh,
     value: null,
   });
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
 
     async function update() {
-      setState({ error: null, loading: true, value: null });
+      setState((current) => {
+        const hasValue = current.value !== null;
+
+        return {
+          error: null,
+          isFetching: true,
+          isPending: !hasValue,
+          isRefetching: hasValue,
+          refresh,
+          value: current.value,
+        };
+      });
 
       try {
-        const value = await load();
+        const value = await load({ signal: controller.signal });
 
         if (!cancelled) {
-          setState({ error: null, loading: false, value });
+          setState({
+            error: null,
+            isFetching: false,
+            isPending: false,
+            isRefetching: false,
+            refresh,
+            value,
+          });
         }
       } catch (error) {
         if (!cancelled) {
           setState({
             error: error instanceof Error ? error.message : 'Request failed',
-            loading: false,
+            isFetching: false,
+            isPending: false,
+            isRefetching: false,
+            refresh,
             value: null,
           });
         }
@@ -40,8 +71,9 @@ export function useAsyncValue<TValue>(load: () => Promise<TValue>): AsyncState<T
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [load]);
+  }, [load, refreshVersion]);
 
   return state;
 }

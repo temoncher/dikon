@@ -1,18 +1,22 @@
-import { use, useMemo } from 'react';
+import { useMemo } from 'react';
 
-import { RootDiContext } from '../di';
+import type { RouterService } from '../shared/routerTypes';
 import { useAsyncValue } from '../shared/useAsyncValue';
-import { issuesDikon } from './issuesDi';
+import { issuesDiModule } from './issuesDi';
+import type { IssuesDeps } from './issuesDi';
 
-export default function IssuesRoute() {
-  const rootDi = use(RootDiContext);
-  const di = useMemo(() => issuesDikon.build(undefined, rootDi), [rootDi]);
+interface IssuesRouteProps {
+  readonly shellDi: IssuesDeps & { readonly router: RouterService };
+}
+
+export default function IssuesRoute({ shellDi }: IssuesRouteProps) {
+  const di = useMemo(() => issuesDiModule.build(undefined, shellDi), [shellDi]);
   const issues = useAsyncValue(di.loadIssues);
 
   return (
     <section className='repo-lens__panel' data-testid='route-panel'>
       <p className='repo-lens__section-title'>{di.routeMetadata.title}</p>
-      {issues.loading ? <p>Loading issues...</p> : null}
+      {issues.isPending ? <p>Loading issues...</p> : null}
       {issues.error === null ? null : <p role='alert'>{issues.error}</p>}
       {issues.value?.length === 0 ? <p>{di.routeMetadata.emptyText}</p> : null}
       <ul className='repo-lens__list'>
@@ -26,10 +30,10 @@ export default function IssuesRoute() {
         ))}
       </ul>
       <div className='repo-lens__actions'>
-        <button onClick={() => rootDi.router.navigate({ id: 'dashboard' })} type='button'>
+        <button onClick={() => shellDi.router.navigate({ id: 'dashboard' })} type='button'>
           Back to overview
         </button>
-        <button onClick={() => rootDi.router.navigate({ id: 'commits' })} type='button'>
+        <button onClick={() => shellDi.router.navigate({ id: 'commits' })} type='button'>
           View commits
         </button>
       </div>

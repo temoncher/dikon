@@ -1,7 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { RootDiContext, rootDikon } from '../di';
-import { createFeatureFlagClient } from '../shared/featureFlags';
 import {
   createErrorHttpClient,
   createFakeHttpClient,
@@ -19,55 +17,50 @@ const meta = {
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj;
+
+const repositoryConfig = {
+  owner: 'temoncher',
+  repo: 'dikon',
+  fullName: 'temoncher/dikon',
+};
+
+const noopRouter = {
+  navigate: () => undefined,
+};
 
 export const Loading: Story = {
   render: () => (
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient(),
+    <DashboardRoute
+      shellDi={{
         httpClient: createLoadingHttpClient(),
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <DashboardRoute />
-    </RootDiContext>
+        repositoryConfig,
+        router: noopRouter,
+      }}
+    />
   ),
 };
 
 export const Error: Story = {
   render: () => (
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient(),
+    <DashboardRoute
+      shellDi={{
         httpClient: createErrorHttpClient('Repository unavailable'),
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <DashboardRoute />
-    </RootDiContext>
+        repositoryConfig,
+        router: noopRouter,
+      }}
+    />
   ),
 };
 
 export const Success: Story = {
   render: () => (
-    <RootDiContext
-      value={rootDikon.build({
-        appConfig: { owner: 'temoncher', repo: 'dikon' },
-        featureFlagClient: createFeatureFlagClient(),
+    <DashboardRoute
+      shellDi={{
         httpClient: createFakeHttpClient(),
-        router: {
-          navigate: () => undefined,
-        },
-      })}
-    >
-      <DashboardRoute />
-    </RootDiContext>
+        repositoryConfig,
+        router: noopRouter,
+      }}
+    />
   ),
 };

@@ -1,16 +1,14 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { createWouterRouterService } from './wouterRouterService';
 
 describe('createWouterRouterService', () => {
   test('adapts wouter navigation to the DI router interface', () => {
-    const navigatedTo: string[] = [];
-    const router = createWouterRouterService((path) => {
-      navigatedTo.push(path);
-    });
+    const navigate = vi.fn<() => void>();
+    const router = createWouterRouterService(navigate);
 
     router.navigate({ id: 'issues' });
 
-    expect(navigatedTo).toEqual(['/issues']);
+    expect(navigate).toHaveBeenCalledWith('/issues');
   });
 });

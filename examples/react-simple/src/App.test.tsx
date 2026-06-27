@@ -9,7 +9,7 @@ describe("react-simple example", () => {
     localStorage.clear();
   });
 
-  test("passes the built container through props", async () => {
+  test("renders the configured title and adds notes", async () => {
     const user = userEvent.setup();
     const di = createDi()
       .override({

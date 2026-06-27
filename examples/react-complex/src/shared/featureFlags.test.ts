@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 
 import { dikon } from '../../../../dikon.ts';
-import { createFeatureFlagClient, createFeatureFlagsDikon } from './featureFlags';
+import { createFeatureFlagsDiModule, createStaticFeatureFlagClient } from './featureFlags';
 
-describe('createFeatureFlagsDikon', () => {
+describe('createFeatureFlagsDiModule', () => {
   test('provides typed feature flags from namespaced root flag values and defaults', () => {
-    const flagsDikon = createFeatureFlagsDikon({
+    const flagsDiModule = createFeatureFlagsDiModule({
       namespace: 'commits',
       flags: {
         compactList: false,
@@ -13,10 +13,10 @@ describe('createFeatureFlagsDikon', () => {
       },
     });
     const di = dikon()
-      .require<{ featureFlagClient: ReturnType<typeof createFeatureFlagClient> }>()
-      .use(flagsDikon)
+      .require<{ featureFlagClient: ReturnType<typeof createStaticFeatureFlagClient> }>()
+      .use(flagsDiModule)
       .build({
-        featureFlagClient: createFeatureFlagClient({
+        featureFlagClient: createStaticFeatureFlagClient({
           'commits.compactList': true,
         }),
       });

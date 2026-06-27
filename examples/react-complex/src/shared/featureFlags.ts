@@ -9,22 +9,24 @@ type DeclaredFlags<T extends FlagDefaults> = {
   readonly [Key in keyof T]: boolean;
 };
 
-interface FeatureFlagsDikonConfig<T extends FlagDefaults> {
+interface FeatureFlagsDiModuleConfig<T extends FlagDefaults> {
   readonly namespace: string;
   readonly flags: T;
 }
 
-export function createFeatureFlagClient(overrides: Readonly<Record<string, boolean>> = {}) {
+export type StaticFeatureFlagValues = Readonly<Record<string, boolean>>;
+
+export function createStaticFeatureFlagClient(flags: StaticFeatureFlagValues): FeatureFlagClient {
   return {
-    isEnabled: (key: string) => overrides[key],
+    isEnabled: (key: string) => flags[key],
   } satisfies FeatureFlagClient;
 }
 
 /**
- * Routes `use` this standalone dikon when they want typed feature flags backed by root infra.
+ * Routes `use` this standalone DI module when they want typed feature flags backed by a parent flag service.
  */
-export function createFeatureFlagsDikon<const T extends FlagDefaults>(
-  config: FeatureFlagsDikonConfig<T>,
+export function createFeatureFlagsDiModule<const T extends FlagDefaults>(
+  config: FeatureFlagsDiModuleConfig<T>,
 ) {
   return dikon()
     .require<{ featureFlagClient: FeatureFlagClient }>()

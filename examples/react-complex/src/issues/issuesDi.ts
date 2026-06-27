@@ -1,8 +1,14 @@
 import { dikon } from '../../../../dikon.ts';
-import type { RootDi } from '../di';
-import { createFeatureFlagsDikon } from '../shared/featureFlags';
+import { createFeatureFlagsDiModule } from '../shared/featureFlags';
+import type { FeatureFlagClient } from '../shared/featureFlags';
 import type { IssueSummary, RepositoryConfig } from '../shared/githubTypes';
 import type { HttpClient } from '../shared/httpClient';
+
+export interface IssuesDeps {
+  readonly featureFlagClient: FeatureFlagClient;
+  readonly httpClient: HttpClient;
+  readonly repositoryConfig: RepositoryConfig;
+}
 
 interface GithubIssueResponse {
   readonly number: number;
@@ -14,34 +20,44 @@ interface GithubIssueResponse {
   readonly pull_request?: unknown;
 }
 
-const issuesFlagsDikon = createFeatureFlagsDikon({
+const issuesFlagsDiModule = createFeatureFlagsDiModule({
   namespace: 'issues',
   flags: {
     showAuthor: true,
   },
 });
 
-async function loadIssues(
-  httpClient: HttpClient,
-  repository: RepositoryConfig,
-): Promise<readonly IssueSummary[]> {
-  const data = await httpClient.get<readonly GithubIssueResponse[]>(
-    `/repos/${repository.owner}/${repository.repo}/issues?state=open&per_page=5`,
-  );
-
-  return data
-    .filter((issue) => issue.pull_request === undefined)
-    .map((issue) => ({
-      number: issue.number,
-      title: issue.title,
-      authorLogin: issue.user?.login ?? 'unknown',
-      htmlUrl: issue.html_url,
-    }));
+interface LoadIssuesDeps {
+  readonly httpClient: HttpClient;
+  readonly repositoryConfig: RepositoryConfig;
 }
 
-export const issuesDikon = dikon()
-  .require<RootDi>()
-  .use(issuesFlagsDikon)
+function createLoadIssues({ httpClient, repositoryConfig }: LoadIssuesDeps) {
+  return async (options?: { signal: AbortSignal }) => {
+    const data = await httpClient.get<readonly GithubIssueResponse[]>(
+      `/repos/${repositoryConfig.owner}/${repositoryConfig.repo}/issues?state=open&per_page=5`,
+      {
+        operation: 'issues.loadIssues',
+        signal: options?.signal,
+      },
+    );
+
+    return data
+      .filter((issue) => issue.pull_request === undefined)
+      .map(
+        (issue): IssueSummary => ({
+          number: issue.number,
+          title: issue.title,
+          authorLogin: issue.user?.login ?? 'unknown',
+          htmlUrl: issue.html_url,
+        }),
+      );
+  };
+}
+
+export const issuesDiModule = dikon()
+  .require<IssuesDeps>()
+  .use(issuesFlagsDiModule)
   .provide({
     routeMetadata() {
       return {
@@ -49,9 +65,7 @@ export const issuesDikon = dikon()
         title: 'Open issues',
       };
     },
-    loadIssues({ httpClient, repositoryConfig }) {
-      return () => loadIssues(httpClient, repositoryConfig);
-    },
+    loadIssues: createLoadIssues,
   });
 
-export type IssuesDi = dikon.Of<typeof issuesDikon>;
+export type IssuesDi = dikon.Of<typeof issuesDiModule>;
