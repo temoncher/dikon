@@ -14,7 +14,6 @@
  * await di.httpClient.get<readonly { id: number; title: string }[]>('/posts');
  * ```
  */
-export function dikon(): dikon.Dikon<{}, {}>;
 export function dikon(): dikon.Dikon<{}, {}> {
   return createDikon([]);
 }
@@ -38,9 +37,55 @@ export function dikon(): dikon.Dikon<{}, {}> {
  * ```
  */
 export namespace dikon {
+  /**
+   * Extracts the built container type from a composed dikon.
+   *
+   * Use this when you export a reusable dikon builder and want a matching
+   * container type without exporting the internal type ledgers.
+   *
+   * ```ts
+   * export const appDikon = dikon()
+   *     .require<{ config: { readonly baseUrl: string } }>()
+   *     .provide({
+   *         url({ config }) {
+   *             return `${config.baseUrl}/posts`;
+   *         },
+   *     });
+   *
+   * export type AppDi = dikon.Of<typeof appDikon>;
+   *
+   * const getPostsUrl = (di: AppDi) => di.url;
+   * ```
+   */
   export type Of<T extends Dikon<any, any>> = Built<T[typeof __dikonTypes]['existingDeps']>;
 
-  // Explicit invariance avoids TypeScript recalculating variance for the fluent dikon type.
+  /**
+   * A composable Dikon builder.
+   *
+   * The generic parameters are internal type ledgers:
+   *
+   * - `TExistingDeps` is what factories can read and what `build()` returns.
+   * - `TRequires` is what still must be supplied by `build()`, a parent, or a
+   *   later layer.
+   *
+   * Dikon declares these parameters invariant so TypeScript does not
+   * recalculate variance through every fluent step, which matters for long
+   * `.use(...)` chains.
+   *
+   * ```ts
+   * const appDikon = dikon()
+   *     .require<{ config: { readonly baseUrl: string } }>()
+   *     .provide({
+   *         url({ config }) {
+   *             return `${config.baseUrl}/posts`;
+   *         },
+   *     });
+   *
+   * const di = appDikon.build({ config: { baseUrl: 'https://api.test' } });
+   *
+   * di.url; // 'https://api.test/posts'
+   * ```
+   */
   export interface Dikon<in out TExistingDeps, in out TRequires> {
     [__dikonTypes]: {
       existingDeps: TExistingDeps;
@@ -254,6 +299,11 @@ type DikonProvidedKeys<T extends AnyDikon> = Exclude<
   keyof DikonRequires<T>
 >;
 
+// Build argument types mirror the runtime calling forms:
+// - no unsatisfied requirements: build()
+// - standalone requirements: build(requires)
+// - parent-satisfied requirements: build(undefined, parent)
+// - mixed local and parent requirements: build(localRequires, parent)
 type HasNoKeys<T> = keyof T extends never ? true : false;
 type StandaloneBuildArgs<TRequires> =
   HasNoKeys<TRequires> extends true ? [] : [requires: TRequires];
@@ -276,6 +326,8 @@ interface Layer {
   kind: 'override' | 'provide';
 }
 
+// Phantom type channel used by `dikon.Of` and composition helpers. No runtime
+// property with this key is ever written to a dikon object.
 declare const __dikonTypes: unique symbol;
 
 /**
@@ -342,6 +394,8 @@ function buildContainer<TExistingDeps, TRequires>(
           const existingInstances = di[__instances] as Record<PropertyKey, unknown>;
           const serviceFactory = layer.deps[serviceName];
 
+          // Nullish results are treated as uncached, so factories returning
+          // undefined or null will run again on the next read.
           return (existingInstances[serviceName] ??= serviceFactory?.(di));
         },
         configurable: true, // needed so that existing keys can be overwritten
@@ -392,6 +446,9 @@ function createContainer(
   return container;
 }
 
+// Eager builds resolve providers layer-by-layer, but overrides should replace
+// the factory they target before that layer is constructed. This preserves
+// same-layer visibility while avoiding construction of the overridden service.
 function createEagerLayers(layers: Layer[]): FactoryMap[] {
   const eagerLayers: FactoryMap[] = [];
   const serviceLayerIndexes = new Map<PropertyKey, number>();
@@ -454,6 +511,8 @@ function defineReadonlyProperty(
 function reportNonFunctionFactories(deps: FactoryMap): void {
   for (const serviceName of getOwnEnumerableKeys(deps)) {
     if (typeof deps[serviceName] !== 'function') {
+      // Keep runtime permissive; TypeScript is the main guardrail, and this
+      // warning catches plain JavaScript or `any` misuse without changing flow.
       console.error(`[DI] Provided ${String(serviceName)} factory is not a function`);
     }
   }
