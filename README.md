@@ -199,11 +199,6 @@ di[URL]; // "https://api.test/posts"
 services become available here and satisfy any matching requirements; requirements it declares that
 the current module does not already supply bubble up to build time.
 
-Because that DI module is authored from `dikon()` with concrete types, it is type-checked once, in
-isolation. That is the difference from threading a generically-typed module through a helper: there
-are no free `TExistingDeps`/`TRequires` parameters to re-instantiate at each call site, and a DI
-module defined once pays its type-checking cost once no matter how many places `use` it.
-
 DI modules are immutable. `provide`, `override`, and `use` return a new DI module rather than
 mutating the one they were called on, and `build(...)` never mutates either. So you can compose a DI
 module once at module scope, export it, and `build(...)` it repeatedly — each build is independent,
