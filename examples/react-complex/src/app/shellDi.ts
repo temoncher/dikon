@@ -38,6 +38,13 @@ function createRepositoryConfig({ appConfig }: ShellBuildValues): RepositoryConf
 export const shellDiModule = dikon()
   .require<ShellBuildValues>()
   .provide({
+    sidebarMenuItems({ router }) {
+      return [
+        createDashboardSidebarMenuItem({ router }),
+        createCommitsSidebarMenuItem({ router }),
+        createIssuesSidebarMenuItem({ router }),
+      ] as const;
+    },
     repositoryConfig: createRepositoryConfig,
     baseHttpClient() {
       return createHttpClient({ apiBaseUrl: GITHUB_API_BASE_URL });
@@ -52,13 +59,6 @@ export const shellDiModule = dikon()
   })
   .provide({
     requestObservers: createRequestObservers,
-    sidebarMenuItems({ router }) {
-      return [
-        createDashboardSidebarMenuItem({ router }),
-        createCommitsSidebarMenuItem({ router }),
-        createIssuesSidebarMenuItem({ router }),
-      ] as const;
-    },
   })
   .provide({
     httpClient({ baseHttpClient, createRequestContext, requestObservers }) {
