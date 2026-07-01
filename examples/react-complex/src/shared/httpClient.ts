@@ -1,6 +1,6 @@
 import type { CreateRequestContext, RequestObserver } from './requestTracking';
 
-export interface HttpRequestOptions {
+interface HttpRequestOptions {
   readonly operation?: string;
   readonly signal?: AbortSignal;
 }

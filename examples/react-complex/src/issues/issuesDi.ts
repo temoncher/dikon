@@ -67,5 +67,3 @@ export const issuesDiModule = dikon()
     },
     loadIssues: createLoadIssues,
   });
-
-export type IssuesDi = dikon.Of<typeof issuesDiModule>;

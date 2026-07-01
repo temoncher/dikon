@@ -137,5 +137,3 @@ export const commitsDiModule = dikon()
     loadCommits: createLoadCommits,
     commitsRefreshService: createCommitsRefreshService,
   });
-
-export type CommitsDi = dikon.Of<typeof commitsDiModule>;

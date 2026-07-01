@@ -1,4 +1,4 @@
-export interface RequestContext {
+interface RequestContext {
   readonly id: string;
   readonly operation: string;
   readonly startedAt: number;

@@ -47,5 +47,3 @@ export const dashboardDiModule = dikon()
     },
     loadRepository: createLoadRepository,
   });
-
-export type DashboardDi = dikon.Of<typeof dashboardDiModule>;
