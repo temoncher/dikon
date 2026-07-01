@@ -1,11 +1,6 @@
 {
   "$schema": "./node_modules/knip/schema.json",
-  "entry": [
-    "src/**/*.test.{ts,tsx}",
-    "src/**/*.screenshot.test.tsx",
-    "src/**/*.stories.tsx",
-    "vitest.browser.config.ts"
-  ],
+  "entry": ["src/**/*.screenshot.test.tsx", "src/**/*.stories.tsx"],
   "project": [
     "src/**/*.{ts,tsx}",
     ".storybook/*.ts",
