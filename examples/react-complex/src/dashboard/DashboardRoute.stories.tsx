@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { QueryClientProvider } from '@tanstack/react-query';
 
+import { createAppQueryClient } from '../app/queryClient';
 import {
   createErrorHttpClient,
   createFakeHttpClient,
@@ -10,6 +12,13 @@ import DashboardRoute from './DashboardRoute';
 const meta = {
   title: 'Complex/Dashboard Route',
   component: DashboardRoute,
+  decorators: [
+    (Story) => (
+      <QueryClientProvider client={createAppQueryClient()}>
+        <Story />
+      </QueryClientProvider>
+    ),
+  ],
   parameters: {
     layout: 'centered',
   },

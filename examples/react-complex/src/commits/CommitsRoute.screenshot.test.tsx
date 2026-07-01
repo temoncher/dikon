@@ -1,7 +1,9 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { page } from 'vitest/browser';
 
+import { createAppQueryClient } from '../app/queryClient';
 import { createStaticFeatureFlagClient } from '../shared/featureFlags';
 import type { StaticFeatureFlagValues } from '../shared/featureFlags';
 import type { HttpClient } from '../shared/httpClient';
@@ -69,7 +71,11 @@ test.each(states)(
       router: noopRouter,
     };
 
-    await render(<CommitsRoute shellDi={shellDi} />);
+    await render(
+      <QueryClientProvider client={createAppQueryClient()}>
+        <CommitsRoute shellDi={shellDi} />
+      </QueryClientProvider>,
+    );
 
     await expect(page.getByTestId('route-panel')).toMatchScreenshot(name);
   },

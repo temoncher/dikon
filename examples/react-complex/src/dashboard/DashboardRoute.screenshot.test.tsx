@@ -1,7 +1,9 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { page } from 'vitest/browser';
 
+import { createAppQueryClient } from '../app/queryClient';
 import {
   createErrorHttpClient,
   createFakeHttpClient,
@@ -41,7 +43,11 @@ test.each(states)('$name visual state stays stable', async ({ httpClient, name }
     router: noopRouter,
   };
 
-  await render(<DashboardRoute shellDi={shellDi} />);
+  await render(
+    <QueryClientProvider client={createAppQueryClient()}>
+      <DashboardRoute shellDi={shellDi} />
+    </QueryClientProvider>,
+  );
 
   await expect(page.getByTestId('route-panel')).toMatchScreenshot(name);
 });

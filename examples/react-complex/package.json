@@ -19,6 +19,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.101.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "wouter": "3.0.0"

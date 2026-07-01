@@ -25,9 +25,10 @@ child container from the shell container.
 
 ## Shell DI
 
-`src/main.tsx` creates the service that is naturally owned by React:
+`src/main.tsx` creates the services that are naturally owned by React:
 
 - the `wouter` router adapter.
+- the TanStack Query client/provider.
 
 The router and static app configuration are passed flat into `shellDiModule.build(...)`. Shell DI
 provides regular app services such as the base HTTP client and static feature flag client with named
@@ -70,14 +71,13 @@ in with a local symbol method, and `disposeModuleDisposables(di)` walks already-
 with `dikon.instances(...)`.
 
 The concrete page-owned service in this example is `commitsRefreshService` in
-`src/commits/commitsDi.ts`. `start(commits.refresh)` starts a `setInterval(...)` refresh timer while
+`src/commits/commitsDi.ts`. `start(refreshCommits)` starts a `setInterval(...)` refresh timer while
 the commits page is visible, and `dispose()` clears the timer when the user navigates away from the
-commits route. `CommitsRoute` gives it the imperative `commits.refresh` handle returned by
-`useAsyncValue(...)`, starts the service directly, and disposes that child route DI from the route
-unmount cleanup.
+commits route. `CommitsRoute` gives it a small callback around TanStack Query's `refetch`, starts the
+service directly, and disposes that child route DI from the route unmount cleanup.
 
 Route request cancellation is separate from this disposable-service example: in-flight route requests
-are canceled by the fresh abort signal passed into each `useAsyncValue(...)` load.
+are canceled by the fresh abort signal passed into each route's `useQuery(...)` loader.
 
 ## Reusable DI Module
 

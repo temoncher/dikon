@@ -1,8 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import { disposeModuleDisposables } from '../shared/disposeModuleDisposables';
 import type { RouterService } from '../shared/routerTypes';
-import { useAsyncValue } from '../shared/useAsyncValue';
 import { commitsDiModule } from './commitsDi';
 import type { CommitsDeps } from './commitsDi';
 
@@ -12,7 +12,10 @@ interface CommitsRouteProps {
 
 export default function CommitsRoute({ shellDi }: CommitsRouteProps) {
   const di = useMemo(() => commitsDiModule.build(undefined, shellDi), [shellDi]);
-  const commits = useAsyncValue(di.loadCommits);
+  const commits = useQuery({
+    queryFn: ({ signal }) => di.loadCommits({ signal }),
+    queryKey: ['commits', shellDi.repositoryConfig.fullName],
+  });
   const secondsUntilRefresh = useSyncExternalStore(
     di.commitsRefreshService.subscribe,
     di.commitsRefreshService.getSnapshot,
@@ -27,12 +30,12 @@ export default function CommitsRoute({ shellDi }: CommitsRouteProps) {
     .join(' ');
 
   useEffect(() => {
-    di.commitsRefreshService.start(commits.refresh);
+    di.commitsRefreshService.start(commits.refetch);
 
     return () => {
       void disposeModuleDisposables(di);
     };
-  }, [commits.refresh, di]);
+  }, [di, commits.refetch]);
 
   return (
     <section className='repo-lens__panel' data-testid='route-panel'>
@@ -43,10 +46,10 @@ export default function CommitsRoute({ shellDi }: CommitsRouteProps) {
           : `Next refresh in ${secondsUntilRefresh} ${refreshUnit}`}
       </p>
       {commits.isPending ? <p>Loading commits...</p> : null}
-      {commits.error === null ? null : <p role='alert'>{commits.error}</p>}
-      {commits.value?.length === 0 ? <p>{di.routeMetadata.emptyText}</p> : null}
+      {commits.error === null ? null : <p role='alert'>{commits.error.message}</p>}
+      {commits.data?.length === 0 ? <p>{di.routeMetadata.emptyText}</p> : null}
       <ul className={listClassName}>
-        {commits.value?.map((commit) => (
+        {commits.data?.map((commit) => (
           <li key={commit.sha}>
             <a href={commit.htmlUrl}>{commit.message}</a>
             <span>

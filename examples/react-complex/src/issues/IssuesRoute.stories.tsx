@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { QueryClientProvider } from '@tanstack/react-query';
 
+import { createAppQueryClient } from '../app/queryClient';
 import { createStaticFeatureFlagClient } from '../shared/featureFlags';
 import {
   createEmptyHttpClient,
@@ -12,6 +14,13 @@ import IssuesRoute from './IssuesRoute';
 const meta = {
   title: 'Complex/Issues Route',
   component: IssuesRoute,
+  decorators: [
+    (Story) => (
+      <QueryClientProvider client={createAppQueryClient()}>
+        <Story />
+      </QueryClientProvider>
+    ),
+  ],
   parameters: {
     layout: 'centered',
   },

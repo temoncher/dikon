@@ -1,7 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import type { RouterService } from '../shared/routerTypes';
-import { useAsyncValue } from '../shared/useAsyncValue';
 import { issuesDiModule } from './issuesDi';
 import type { IssuesDeps } from './issuesDi';
 
@@ -11,16 +11,19 @@ interface IssuesRouteProps {
 
 export default function IssuesRoute({ shellDi }: IssuesRouteProps) {
   const di = useMemo(() => issuesDiModule.build(undefined, shellDi), [shellDi]);
-  const issues = useAsyncValue(di.loadIssues);
+  const issues = useQuery({
+    queryFn: ({ signal }) => di.loadIssues({ signal }),
+    queryKey: ['issues', shellDi.repositoryConfig.fullName],
+  });
 
   return (
     <section className='repo-lens__panel' data-testid='route-panel'>
       <p className='repo-lens__section-title'>{di.routeMetadata.title}</p>
       {issues.isPending ? <p>Loading issues...</p> : null}
-      {issues.error === null ? null : <p role='alert'>{issues.error}</p>}
-      {issues.value?.length === 0 ? <p>{di.routeMetadata.emptyText}</p> : null}
+      {issues.error === null ? null : <p role='alert'>{issues.error.message}</p>}
+      {issues.data?.length === 0 ? <p>{di.routeMetadata.emptyText}</p> : null}
       <ul className='repo-lens__list'>
-        {issues.value?.map((issue) => (
+        {issues.data?.map((issue) => (
           <li key={issue.number}>
             <a href={issue.htmlUrl}>
               #{issue.number} {issue.title}
